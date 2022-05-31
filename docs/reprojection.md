@@ -1,0 +1,3 @@
+# Demonstration: “re-projection” of point clouds
+
+The “generate-demo-norgb.py” script requires that the “common directory” with all captures be known. That directory should contain the JSON files with calibration information as well. When run, this script will generate a video with the re-projection results, that is, showing the kinect point clouds re-projected on to the ceiling camera (omnidirectional) view.
