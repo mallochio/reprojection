@@ -14,3 +14,7 @@ When running the script, the user will be presented with three RGB images corres
 - [J] <> [L] Move backwards/forwards 100 ms on all sequences (this helps check the adjustments so far).
 - [M] <> [ . ] Move one frame back/forwards on all sequences (also used to check if syncing is done correctly).
 - [Spacebar] saves the “out/shots0.txt” file with the deviations of each camera in milliseconds. Furthermore, for each time it is pressed, it adds a line in which the name of the “equivalent” images is stored. This information is used by “prepare_for_matlab.py” to copy these images into a separate folder, with a naming convention to make it easy to load on MATLAB, as well as adapting their size to the common 1280x900 (used for calibration).
+
+## TO DO
+
+* [ ] Make the script work with more than 2 Kinects, e.g. by having keys [0], [1], [2] work as 'select Kinect', then [Q] and [E] work on the selected Kinect.
