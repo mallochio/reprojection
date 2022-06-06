@@ -1,6 +1,8 @@
 # coding: utf-8
-
-# An example using startStreams
+"""
+    This script captures images from one Kinect and the Omnidirectional camera on the ceiling
+    FOR CALIBRATION USE.
+"""
 
 import numpy as np
 import cv2
