@@ -85,3 +85,22 @@ sudo cp ../platform/linux/udev/90-kinect2.rules /etc/udev/rules.d/
 ```
 
 then **replug** the Kinect.
+
+## Checklist for setting up the room for capture
+- [ ] Study the room layouts before installation
+- [ ] Figure out configuration of each room so that laptops and cameras can be placed without appearing on frames
+- [ ] Figure out where persons are going to be standing before recording
+- [ ] Check whether each item is in recording condition (and relaying info) after setting up -
+    - [ ] Kinects
+    - [ ] Omni camera
+    - [ ] Egocentric camera
+    - [ ] Empatica device
+
+
+## Procedure for synchronization before beginning recording each ADL session
+To enable the synchronization of kinects with each other, lights in the recording area are switched on and off. This quick action can then be verified in during the synchronization stage.
+
+Actors doing the ADLs are to be equipped with an egocentric camera and an empatica wearable device. Each actor stands facing one of the kinects in the area and then switches on the empatica device so the change in lights on the empatica indicating that it is operational is registered on both the mounted egocentric camera and on the kinect. This procedure allows that all the recording devices can be synchronized with each other at a later stage.
+
+In the case of long recording sequences, this should also be done at regular intervals in order to check for visual drift between recording devices.
+
