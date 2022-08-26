@@ -126,11 +126,11 @@ class FrameKeeper(object):
                 self._add_frameset(capture_name, file_set, cv2.CV_16UC1)
 
                 # Load the frame set for the densepose masks
-                file_set = sorted(glob('%s/%s/depth-dp-masks/*' % (base_dir, capture_name)))[1:]
-                if len(file_set) > 0:
+                file_set_dp = sorted(glob('%s/%s/depth-dp-masks/*' % (base_dir, capture_name)))[1:]
+                if len(file_set_dp) > 0:
                     capture_mod_name = '_%s_rgb_densepose' % capture_name
                     self._ts_diffs[capture_mod_name] = syncro_data[capture_name]['diff_to_lead']
-                    self._add_frameset(capture_mod_name, file_set, cv2.CV_8UC3)
+                    self._add_frameset(capture_mod_name, file_set_dp, cv2.CV_8UC3)
 
                 # Load the kinect camera parameters
                 self.kinect_params[k_idx] = lomat.get_mono_calibration_matrices('%s/k%dParams.json' % (base_dir, k_idx))

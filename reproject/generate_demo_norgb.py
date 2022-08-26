@@ -1,6 +1,10 @@
 """
 Generate demo for frames
 """
+# First of all, let this module find others.
+import sys
+sys.path.append('..')
+
 import utils.morphology as morphology
 from utils import kinect
 from utils import omni
@@ -9,7 +13,7 @@ import numpy as np
 import cv2
 from tqdm import tqdm
 from utils import distance_filter as df
-from utils import load_config as conf
+from config import load_config as conf
 # Destination image size
 uw, uh = 1200, 900
 scale = .4
@@ -31,9 +35,14 @@ def project_kinect_to_omni(frames, k_idx, fk):
     depth_visible = np.uint8((depth / 4500.) * 255.)
     # cv2.imshow('depth image%d' % k_idx, cv2.resize(depth_visible, dsize=dsize))
 
-    # motion_mask = morphology.generate_mask(depth, background, cc=True)
-    mask = cv2.flip(frames['_capture%d_rgb_densepose' % k_idx][:,:,0], 1)
+    # Densepose AVAILABLE
+    # mask = cv2.flip(frames['_capture%d_rgb_densepose' % k_idx][:,:,0], 1)
     # mask = np.logical_and(mask, motion_mask)
+    
+    # No Densepose EXISTS
+    motion_mask = morphology.generate_mask(depth, background, cc=True)
+    mask = motion_mask
+    
     masked_depth = np.zeros_like(depth)
     masked_depth[mask>0] = depth[mask>0]
     valid = df.proximity_filter(masked_depth, fk.kinect_params[k_idx]['k_params'])
