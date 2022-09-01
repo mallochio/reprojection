@@ -14,6 +14,7 @@ import cv2
 from tqdm import tqdm
 from utils import distance_filter as df
 from config import load_config as conf
+
 # Destination image size
 uw, uh = 1200, 900
 scale = .4
