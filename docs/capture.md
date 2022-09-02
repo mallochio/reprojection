@@ -74,6 +74,9 @@ A “Kinect-capture” process is required for each machine, and an “Omnidir-c
 
 As with calibration, a process is required per each PC+Kinect, and another “Omnidir-capture” in either of the machines. Once recorded, stop the processes, and copy the populated “capture0” from each machine into a **common folder** in the machine where syncing is carried out. Rename one to “capture1”. Copy “omni” outside, to the common folder, so that it contains: capture0, capture1, and omni. Each of “capture0” and “1” have “ir”, “rgb” and “depth” inside, as described.
 
+### Note: In case of multiple recording sessions in the same day -
+In case there are multiple recording sessions that take place in the same day, name the folder containing the files from each session with a suffix indicating the order of recording, starting with '01' for the first session. 
+
 ## Troubleshooting
 
 Kinects connected to a new computer after just installing libfreenect2 **won't work** unless the proper USB *permissions* file is copied as per the documented instructions, that is:
