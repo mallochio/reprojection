@@ -9,31 +9,31 @@
 From a clean machine using Ubuntu 18.04 (or later, however, not tested), it is necessary to install the following packages:
 
 ```
-# apt-get install -y build-essential python3 python3-pip libportaudio2 	cmake pkg-config libusb-dev libusb-1.0-0 libusb-1.0-0-dev libturbojpeg0-dev libopencv-dev libglfw3-dev libopenni2-dev
+apt-get install -y build-essential python3 python3-pip libportaudio2 	cmake pkg-config libusb-dev libusb-1.0-0 libusb-1.0-0-dev libturbojpeg0-dev libopencv-dev libglfw3-dev libopenni2-dev
 ```
 
 Then, use Python’s PIP to install the following:
 
 ```
-# pip3 install sounddevice readchar tqdm
+pip3 install sounddevice readchar tqdm
 ```
 
 Once the prerequisites are installed, proceed to install libfreenect2 (download from official repo and build using cmake):
 
 ```
-~$ cd libfreenect2
-~/libfreenect2$ mkdir build && cd build
-~/libfreenect2/build$ cmake ..
-~/libfreenect2/build$ make && make install
+cd libfreenect2
+mkdir build && cd build
+cmake ..
+make && make install
 ```
 
 Finally, the 'capture' subfolder binaries, are also built via cmake:
 
 ```
-~$ cd kinect-capture
-~/kinect-capture$ mkdir build && cd build
-~/kinect-capture/build$ cmake ..
-~/kinect-capture/build$ make
+cd capture
+mkdir build && cd build
+cmake ..
+make
 ```
 
 ## Usage of the binaries
@@ -41,7 +41,7 @@ Finally, the 'capture' subfolder binaries, are also built via cmake:
 To run “Kinect-capture”:
 
 ```
-$ ./Kinect-capture 0 15
+./Kinect-capture 0 15
 ```
 
 (i.e. Kinect #0, 15 fps)
@@ -49,7 +49,7 @@ $ ./Kinect-capture 0 15
 To run “Omidir-capture”:
 
 ```
-$ ./Omnidir-capture 15
+./Omnidir-capture 15
 ```
 
 (It will search for **“omnidai.dtic.ua.es” in your network by default**, and uses 15 fps)
