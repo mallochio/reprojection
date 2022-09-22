@@ -124,7 +124,7 @@ In the case of long recording sequences, this should also be done at regular int
     - [ ] 2 Bars for omni mounting
 - [ ] Egocentric camera
     - [ ] Chest mount setup
-    - [ ] Mag
+- [ ] Empatica device
 - [ ] Router 
     - [ ] Power cable
     - [ ] Ethernet cable
