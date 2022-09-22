@@ -119,18 +119,18 @@ In the case of long recording sequences, this should also be done at regular int
     - [ ] Connector cord
 - [ ] Omnicam
     - [ ] Power cable
-    [ ] Magnet
-    [ ] Cable ties
-    [ ] 2 Bars for omni mounting
-[ ] Egocentric camera
-    [ ] Chest mount setup
-    [ ] Mag
-[ ] Router 
-    [ ] Power cable
-    [ ] Ethernet cable
-[ ] Double sided tape
-[ ] Checkerboard
-[ ] Power Strip / Extension cord
-[ ] Ethernet to USB converter
-[ ] Laptops 
-[ ] Human(s)
+    - [ ] Magnet
+    - [ ] Cable ties
+    - [ ] 2 Bars for omni mounting
+- [ ] Egocentric camera
+    - [ ] Chest mount setup
+    - [ ] Mag
+- [ ] Router 
+    - [ ] Power cable
+    - [ ] Ethernet cable
+- [ ] Double sided tape
+- [ ] Checkerboard
+- [ ] Power Strip / Extension cord
+- [ ] Ethernet to USB converter
+- [ ] Laptops 
+- [ ] Human(s)
