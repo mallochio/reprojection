@@ -131,6 +131,7 @@ In the case of long recording sequences, this should also be done at regular int
     - [ ] Power cable
     - [ ] Ethernet cable
 - [ ] Double sided tape
+- [ ] Kinect stand wooden horse 
 - [ ] Checkerboard
 - [ ] Power Strip / Extension cord
 - [ ] Ethernet to USB converter
