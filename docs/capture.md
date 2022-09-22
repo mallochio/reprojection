@@ -108,17 +108,17 @@ Actors doing the ADLs are to be equipped with an egocentric camera and an empati
 In the case of long recording sequences, this should also be done at regular intervals in order to check for visual drift between recording devices.
 
 ## Recording items checklist
-[ ] Kinect 1
-    [ ] Power cable
-    [ ] Connector cord
-[ ] Kinect 2
-    [ ] Power cable
-    [ ] Connector cord
-[ ] Kinect 3
-    [ ] Power cable
-    [ ] Connector cord
-[ ] Omnicam
-    [ ] Power cable
+- [ ] Kinect 1
+    - [ ] Power cable
+    - [ ] Connector cord
+- [ ] Kinect 2
+    - [ ] Power cable
+    - [ ] Connector cord
+- [ ] Kinect 3
+    - [ ] Power cable
+    - [ ] Connector cord
+- [ ] Omnicam
+    - [ ] Power cable
     [ ] Magnet
     [ ] Cable ties
     [ ] 2 Bars for omni mounting
