@@ -121,10 +121,12 @@ In the case of long recording sequences, this should also be done at regular int
     - [ ] Power cable
     - [ ] Magnet
     - [ ] Cable ties
-    - [ ] 2 Bars for omni mounting
+    - [ ] 3 Bars for omni mounting
+    - [ ] Power Bank
 - [ ] Egocentric camera
     - [ ] Chest mount setup
-- [ ] Empatica device
+    - [ ] Safety pins
+- [ ] Empatica device and connector
 - [ ] Router 
     - [ ] Power cable
     - [ ] Ethernet cable
@@ -133,4 +135,5 @@ In the case of long recording sequences, this should also be done at regular int
 - [ ] Power Strip / Extension cord
 - [ ] Ethernet to USB converter
 - [ ] Laptops 
+- [ ] Folding stair
 - [ ] Human(s)
