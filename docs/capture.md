@@ -126,6 +126,7 @@ In the case of long recording sequences, this should also be done at regular int
 - [ ] Egocentric camera
     - [ ] Chest mount setup
     - [ ] Safety pins
+    - [ ] Power Bank
 - [ ] Empatica device and connector
 - [ ] Router 
     - [ ] Power cable
@@ -137,4 +138,7 @@ In the case of long recording sequences, this should also be done at regular int
 - [ ] Ethernet to USB converter
 - [ ] Laptops 
 - [ ] Folding stair
+- [ ] Scissors
+- [ ] USB drive
+- [ ] External hard drive
 - [ ] Human(s)
