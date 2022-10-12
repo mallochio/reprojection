@@ -9,9 +9,7 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 
-// constexpr const char* const _stream = "rtsp://omnidai.dtic.ua.es:554/live1.sdp";
-// constexpr const char* const _stream = "rtsp://172.19.33.33:554/live1.sdp";
-constexpr const char* const _stream = "rtsp://192.168.0.176:554/live1.sdp";
+#include "mini-yaml/Yaml.hpp"
 
 void write_image(const std::string& filename, const cv::Mat& image) {
     cv::imwrite(filename, image);
@@ -20,15 +18,23 @@ void write_image(const std::string& filename, const cv::Mat& image) {
 int main(int argc, char** argv) {
     std::cout << "Omnidirectional camera capture tool" << std::endl;
 
-    double fps_param = 30;
-    if (argc == 2) {
-        fps_param = std::stod(argv[1]);
+    Yaml::Node root;
+    Yaml::Parse(root, "kinects.yaml");
+
+    std::string stream = root["omni_url"].As<std::string>();
+    std::cout << "Connecting to: " << stream << " ..." << std::endl;
+    double fps_param = root["default_fps"].As<double>();
+
+    std::string work_path;
+    if (argc == 3) {
+        work_path = argv[1];
+        fps_param = std::stod(argv[2]);
     } else {
-        std::cerr << "Provide fps parameter" << std::endl;
+        std::cerr << "Error: incorrect argument count. Avoid calling directly, use launch script instead." << std::endl;
         return -1;
     }
 
-    cv::VideoCapture cap = cv::VideoCapture(_stream);
+    cv::VideoCapture cap = cv::VideoCapture(stream);
 
     auto epoch = std::chrono::high_resolution_clock::from_time_t(0);
     auto before = std::chrono::high_resolution_clock::now();
@@ -60,7 +66,7 @@ int main(int argc, char** argv) {
             if(ret) {
                 // cv::imshow("camera", image);
                 std::stringstream ss_rgb;
-                ss_rgb << "capture0/omni/" << mseconds_epoch << ".jpg";
+                ss_rgb << work_path << "/omni/" << mseconds_epoch << ".jpg";
                 std::thread(write_image, ss_rgb.str(), image).detach();
             } else {
                 std::cerr << "Error: could not capture frame" << std::endl;

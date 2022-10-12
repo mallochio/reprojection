@@ -1,0 +1,10 @@
+---
+omni_url: "rtsp://192.168.0.176:554/live1.sdp"
+default_fps: 15
+kinects:
+  - "017273151547"
+  - "500802643142"
+  - "222572134247"
+houses: [at-paus, at-pacos]
+rooms: [bedroom, livingroom, kitchen, bathroom]
+actors: [aida, carlo, kooshan, pau, paco, sid, tamar]

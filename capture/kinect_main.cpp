@@ -13,6 +13,8 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 
+#include "mini-yaml/Yaml.hpp"
+
 using namespace std::chrono;
 
 std::vector<int> write_parameters = {cv::IMWRITE_JPEG_QUALITY, 85};
@@ -29,21 +31,17 @@ void write_image(const std::string& filename, const cv::Mat& image) {
 
 int main(int argc, char** argv) {
     int device_no = 0;
-    double fps_param = 30;
-    if (argc >= 2)
-        device_no = std::stoi(argv[1]);
-    else
-    {
-        std::cerr << "Insufficient parameters: provide device_no and optionally fps";
+    double fps_param = 15;
+    std::string work_path;
+
+    if (argc != 4) {
+        std::cerr << "Error: Incorrect argument number. Avoid calling this program directly, use launch script instead.";
         return -1;
     }
-    if (argc == 3) {
-        fps_param = std::stod(argv[2]);
-    } else {
-        std::cerr << "Excess parameters: provide only device_no and optionally fps";
-    }
+    device_no = std::stoi(argv[1]);
+    work_path = argv[2];
+    fps_param = std::stod(argv[3]);
     
-
     std::cout << "Kinect capture tool (device #" << device_no << ")" << std::endl;
 
     libfreenect2::Freenect2 freenect2;
@@ -54,17 +52,33 @@ int main(int argc, char** argv) {
 
     int num_devices = freenect2.enumerateDevices();
     if(num_devices == 0) {
-        std::cout << "no device connected!" << std::endl;
+        std::cerr << "Error: no device connected!" << std::endl;
         return -1;
     }
     
-    if(device_no > num_devices-1) {
-        std::cout << "No device #" << device_no << " found. Only " << num_devices << " connected.";
+    std::string serial = freenect2.getDeviceSerialNumber(0);
+    std::cout << "Detected Kinect with serial number: " << serial << std::endl;
+
+    Yaml::Node root;
+    Yaml::Parse(root, "kinects.yaml");
+
+    Yaml::Node & kinects = root["kinects"];
+    int device_index = 0;
+    for (int k = 0; k < kinects.Size(); ++k) {
+        if (kinects[k].As<std::string>() == serial) {
+            std::cout << "Found kinect in config file: index = " << device_index << std::endl;
+            break;
+        }
+        device_index ++;
+    }
+    if (device_index != device_no) {
+        std::cerr << "Error: Sanity check failed. Expected kinect " << device_no << ", but found kinect " << device_index << ". Check the cabling and retry!" << std::endl;
         return -1;
     }
-
-    std::string serial = freenect2.getDeviceSerialNumber(device_no);
-    // freenect2.getDefaultDeviceSerialNumber();
+    if (device_index == kinects.Size()) {
+        std::cerr << "Error: The connected Kinect device could not be found in the config file." << std::endl;
+        return -1;
+    }
 
     if(pipeline) {
         std::cout << "OpenGL pipeline created correctly" << std::endl;
@@ -89,17 +103,7 @@ int main(int argc, char** argv) {
         return -1;
   
     std::cout << "Passed" << std::endl;
-    /// [registration setup]
-    libfreenect2::Registration* registration = new libfreenect2::Registration(dev->getIrCameraParams(), dev->getColorCameraParams());
-    libfreenect2::Frame undistorted(512, 424, 4), registered(512, 424, 4);
-    /// [registration setup]
     
-    /*
-    cv::namedWindow("RGB");
-    cv::namedWindow("IR");
-    cv::namedWindow("Depth");
-    */
-
     auto epoch = high_resolution_clock::from_time_t(0);
     auto before = high_resolution_clock::now();
 
@@ -131,34 +135,23 @@ int main(int argc, char** argv) {
         libfreenect2::Frame *ir = frames[libfreenect2::Frame::Ir];
         libfreenect2::Frame *depth = frames[libfreenect2::Frame::Depth];
 
-        registration->apply(rgb, depth, &undistorted, &registered);
-
         cv::Mat rgb_mat = cv::Mat(rgb->height, rgb->width, CV_8UC4, rgb->data).clone();
         cv::Mat ir_mat = cv::Mat(ir->height, ir->width, CV_32F, ir->data).clone();
         cv::Mat depth_mat = cv::Mat(depth->height, depth->width, CV_32F, depth->data).clone();
-        cv::Mat ir_vis, depth_vis, depth_16u;
+        cv::Mat ir_vis, depth_16u;
         ir_mat.convertTo(ir_vis, CV_8U, 255./65535.);
-        // depth_mat.convertTo(depth_vis, CV_8U, 255./4500.);
         depth_mat.convertTo(depth_16u, CV_16U);
-        /*
-        cv::imshow("RGB", rgb_mat);
-        cv::imshow("IR", ir_vis);
-        cv::imshow("Depth", depth_vis);
-        */
-
+        
         std::stringstream ss_rgb;
-        ss_rgb << "capture" << device_no << "/rgb/" << mseconds_epoch << ".jpg";
-        // cv::imwrite(ss_rgb.str(), rgb_mat);
+        ss_rgb << work_path << "/rgb/" << mseconds_epoch << ".jpg";
         std::thread (write_image, ss_rgb.str(), rgb_mat).detach();
 
         std::stringstream ss_ir;
-        ss_ir << "capture" << device_no << "/ir/" << mseconds_epoch << ".jpg";
-        // cv::imwrite(ss_ir.str(), ir_vis);
+        ss_ir << work_path << "/ir/" << mseconds_epoch << ".jpg";
         std::thread (write_image, ss_ir.str(), ir_vis).detach();
 
         std::stringstream ss_depth;
-        ss_depth << "capture" << device_no << "/depth/" << mseconds_epoch << ".png";
-        // cv::imwrite(ss_depth.str(), depth_16u);
+        ss_depth << work_path << "/depth/" << mseconds_epoch << ".png";
         std::thread (write_image, ss_depth.str(), depth_16u).detach();
 
         char key = (char)cv::waitKey(5);
@@ -171,8 +164,6 @@ int main(int argc, char** argv) {
 
     dev->stop();
     dev->close();
-
-    delete registration;
     
     return 0;
 }
