@@ -1,6 +1,4 @@
 import datetime
-from re import I
-from select import select
 import yaml
 import os
 from subprocess import Popen

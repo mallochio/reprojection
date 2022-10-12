@@ -40,23 +40,33 @@ make
 
 To run “Kinect-capture”:
 
+**DEPRECATED (see below)**
 ```
-./Kinect-capture 0 15
+$ ./Kinect-capture 0 15
 ```
 
 (i.e. Kinect #0, 15 fps)
 
 To run “Omidir-capture”:
 
+**DEPRECATED (see below)**
 ```
-./Omnidir-capture 15
+$ ./Omnidir-capture 15
 ```
 
-(It will search for **“omnidai.dtic.ua.es” in your network by default**, and uses 15 fps)
+**NEW: (Oct. 2022):** A much more convenient way is to run the new `launch.py` script which automatically detects connected kinects and determines wheter to run the `Omnidir-capture`based on the kinect number (i.e. the computer with Kinect 0 connected, will also run the omni capture).
 
-“Kinect-capture” **expects a directory** tree to be created in the folder where it is run from. It should be called “captureX” (where X is the number of the Kinect, i.e. zero). Inside it, there should be **three more directories: “ir”, “rgb”, and “depth”** (lowercase in all instances).
+```
+$ python launch.py
+```
 
-Furthermore, the PC in which the omnidirectional camera is also captured, there should be an **additional directory inside capture0, called “omni”**.
+**NEW (cont'd):** A `kinects.yaml` file is provided where the omnidir stream URL can be configured, among other things. The `launch.py` is self-explanatory, and runs a wizard that creates all necessary folders and starts the necessary capture binaries. `kinects.yaml` also contains all information regarding houses (recording locations), rooms, actors, and kinect serial numbers.
+
+~~(It will search for **“omnidai.dtic.ua.es” in your network by default**, and uses 15 fps)~~
+
+~~“Kinect-capture” **expects a directory** tree to be created in the folder where it is run from. It should be called “captureX” (where X is the number of the Kinect, i.e. zero). Inside it, there should be **three more directories: “ir”, “rgb”, and “depth”** (lowercase in all instances).~~
+
+~~Furthermore, the PC in which the omnidirectional camera is also captured, there should be an **additional directory inside capture0, called “omni”**.~~
 
 ## Setting up the cameras and PCs
 
