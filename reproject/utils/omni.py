@@ -1,6 +1,49 @@
 import numpy as np
 from multiprocessing import Pool
 
+def findinvpoly(coeffs, radius):
+    maxerr = np.inf
+    N = 1
+    while maxerr > 0.01:
+        N += 1
+        pol, err = findinvpoly2(coeffs, radius, N)
+        maxerr = np.max(err)
+    
+    return pol, err, N
+
+
+def findinvpoly2(coeffs, radius, N):
+    theta = np.arange(-np.pi, 1.20, step=0.01)
+    r = inv_fun(coeffs, theta, radius)
+    ind = np.argwhere(r != np.inf)
+    theta = theta[ind]
+    r = r[ind]
+
+    pol = np.polyfit(theta, r, N)
+    err = np.abs(r - np.polyval(pol, theta))
+
+    return pol, err, N
+
+
+def inv_fun(coeffs, theta, radius):
+
+    m = np.tan(theta)
+
+    r = np.zeros(shape=m.shape)
+    poly_coeff = np.flip(coeffs).copy()
+    poly_coeff_tmp = poly_coeff.copy()
+    for j in range(len(m)):
+        poly_coeff_tmp[-1] = poly_coeff[-1] - m[j]
+        rho_tmp = np.roots(poly_coeff_tmp)
+        rho_ind = np.argwhere(np.logical_and(np.imag(rho_tmp) == 0, rho_tmp>0, rho_tmp<radius))
+        res = rho_tmp[rho_ind]
+        if np.sum(res) == 0 or len(res)>1:
+            r[j] = np.inf
+        else:
+            r[j] = np.real(res)
+    
+    return r
+
 
 def correct_d_distortion(Xn, Yn, dist_params):
     # Distortion correction vectors
@@ -78,10 +121,9 @@ def omni3dtopixel(X, Y, Z, omni_params):
 def world_to_omni_scaramuzza(Ts, world_coordinates, ocam_intrinsics, uw, uh):
     if len(world_coordinates) == 0:
         return [0], [0]
+
     omni_coordinates = np.matmul(Ts, world_coordinates.T)
-
     max_z = omni_coordinates[2, :].max()
-
     X, Y, Z = omni_coordinates[0, :], omni_coordinates[1, :], omni_coordinates[2, :]
 
     #indices = (Z < max_z - 0.05)
@@ -94,6 +136,47 @@ def world_to_omni_scaramuzza(Ts, world_coordinates, ocam_intrinsics, uw, uh):
 
     c, d, e = ocam_intrinsics['c'], ocam_intrinsics['d'], ocam_intrinsics['e']
     xc, yc = ocam_intrinsics['Centre']
+
+    x = x * c + y * d + xc
+    y = x * e + y + yc
+
+    y[y < 0] = 0
+    x[x < 0] = 0
+    y[np.round(y) >= uh] = uh - 1
+    x[np.round(x) >= uw] = uw - 1
+
+    return x, y
+
+
+def world_to_omni_scaramuzza_fast(Ts, world_coordinates, ocam_intrinsics, uw, uh):
+    if len(world_coordinates) == 0:
+        return [0], [0]
+    
+    omni_coordinates = np.matmul(Ts, world_coordinates.T)
+    max_z = omni_coordinates[2, :].max()
+    X, Y, Z = omni_coordinates[0, :], omni_coordinates[1, :], omni_coordinates[2, :]
+
+    c, d, e = ocam_intrinsics['c'], ocam_intrinsics['d'], ocam_intrinsics['e']
+    xc, yc = ocam_intrinsics['Centre']
+
+    if not 'Poly' in ocam_intrinsics:
+        ss = ocam_intrinsics['Coeffs']
+        radius = np.sqrt((uw/2)**2+(uh/2)**2)
+        ocam_intrinsics['Poly'] = findinvpoly(ss, radius)
+
+    pol = ocam_intrinsics['Poly']
+
+    theta = np.zeros(shape=X.shape)
+    norm = np.sqrt(X**2 + Y**2)
+
+    norm[norm==0] = 1e-9  # eps
+
+    theta = np.atan(Z/norm)
+
+    rho = np.polyval(pol, theta)
+
+    x = X/norm*rho
+    y = Y/norm*rho
 
     x = x * c + y * d + xc
     y = x * e + y + yc
