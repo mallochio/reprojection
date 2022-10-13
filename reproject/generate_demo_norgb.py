@@ -3,7 +3,9 @@ Generate demo for frames
 """
 # First of all, let this module find others.
 import sys
-sys.path.append('..')
+from os.path import abspath
+sys.path.append(abspath('.'))
+sys.path.append(abspath('..'))
 
 import utils.morphology as morphology
 from utils import kinect
@@ -46,8 +48,8 @@ def project_kinect_to_omni(frames, k_idx, fk):
     
     masked_depth = np.zeros_like(depth)
     masked_depth[mask>0] = depth[mask>0]
-    valid = df.proximity_filter(masked_depth, fk.kinect_params[k_idx]['k_params'])
-    masked_depth = valid
+    #valid = df.proximity_filter_fast(masked_depth, fk.kinect_params[k_idx]['k_params'])
+    #masked_depth = valid
 
     binary = np.uint8(np.uint8(masked_depth/4500.*255.) > 0)*255
     # cv2.imshow('masked_depth%d' % k_idx, cv2.resize(binary, dsize=dsize))
@@ -56,7 +58,8 @@ def project_kinect_to_omni(frames, k_idx, fk):
     world_coordinates, valid_depth_coordinates = kinect.depth_to_world(masked_depth, depth,
                                                                            fk.kinect_params[k_idx]['k_params'])
 
-    X, Y = omni.world_to_omni_scaramuzza(fk.Ts[k_idx], world_coordinates, fk.omni_params[k_idx], uw, uh)
+    # X, Y = omni.world_to_omni_scaramuzza(fk.Ts[k_idx], world_coordinates, fk.omni_params[k_idx], uw, uh)
+    X, Y = omni.world_to_omni_scaramuzza_fast(fk.Ts[k_idx], world_coordinates, fk.omni_params[k_idx], uw, uh)
 
     X = np.real(X)
     Y = np.real(Y)
