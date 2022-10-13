@@ -1,3 +1,4 @@
+from statistics import mean
 from utils import load_matlab_calibration as lomat
 import matplotlib.pyplot as plt
 from glob import glob
@@ -12,6 +13,31 @@ def euclidean(pt1, pt2):
     for i in range(len(pt1)):
         d += (pt1[i] - pt2[i])**2
     return sqrt(d)
+
+
+def proximity_filter_fast(depth, k_params, **kwargs):
+    depth_Fx, depth_Fy, depth_Cx, depth_Cy = k_params
+    h, w = depth.shape[:2]
+    z = depth / 1000.
+    x = np.ones((h, w))
+    x[0:h, :] *= np.arange(w)
+    y = np.ones((h, w))
+    y[:, 0:w] *= np.arange(h).reshape(h, 1)
+
+    # pc stands for point cloud.
+    pc = np.zeros((h, w, 3))
+    pc[:, :, 0] = z * (x - depth_Cx) / depth_Fx
+    pc[:, :, 1] = z * (y - depth_Cy) / depth_Fy
+    pc[:, :, 2] = z
+
+    left = np.abs(z - np.roll(z, shift=-1, axis=1))
+    right = np.abs(z - np.roll(z, shift=1, axis=1))
+
+    difs = left + right
+    valid = (difs < .2) * 255
+
+    return valid
+
 
 
 def proximity_filter(depth, k_params, **kwargs):
@@ -37,14 +63,15 @@ def proximity_filter(depth, k_params, **kwargs):
     for c in range(len(Is)):
         i, j = Is[c], Js[c]
         pt = pc[i, j, 0], pc[i, j, 1], pc[i, j, 2]
-        ds = np.zeros(9)
         idx = 0
+        sum_ds = 0.
         for k in range(i - 1, i + 1):
             for l in range(j - 1, j + 1):
                 pt2 = pc[k, l, 0], pc[k, l, 1], pc[k, l, 2]
-                ds[idx] = euclidean(pt, pt2)
+                ds = euclidean(pt, pt2)
+                sum_ds += ds
                 idx += 1
-        if np.mean(ds) <= 0.02:
+        if (sum_ds/9.) <= 0.02:
             valid[i, j] = 255
 
     if 'get_pointcloud' in kwargs and kwargs['get_pointcloud'] is True:
