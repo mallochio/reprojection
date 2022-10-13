@@ -72,11 +72,15 @@ $ python launch.py
 
 Two PCs (at least) are required. Each Kinect will be connected to one PC. The omnidirectional camera and at least one PC should be on the same network. By default the TP Link router that we bought will give the omni camera the following IP: 192.168.0.176 . **It is necessary to create an /etc/hosts entry so that omnidai.dtic.ua.es is redirected to the IP assigned to the omni camera, so that the camera may be found by the software just described.**
 
+**NEW:** The `kinects.yaml` file contains the URL information for the omni camera, in case it needs to be edited.
+
 **IMPORTANT:** Check the omni camera is well focused, open a browser, go to the address above and use the credentials: admin and [password] to access the omni camera viewer on the browser.
 
 ## Capture process (Recording)
 
-A “Kinect-capture” process is required for each machine, and an “Omnidir-capture” on either of them. Once recorded, stop the processes, and copy the “capture0” directory to a common directory in the machine where synchronisation is to be carried out. One of the captures will have to be renamed to “capture1” (**NOTE: consistency is key here!**). Copy “omni” outside, i.e. to the common  folder, so that three subfolders should remain: capture0, capture1 and omni. Each “capture0” and “1” contain “ir”, “rgb” and “depth” folders inside, as already described.
+**OLD way:** A “Kinect-capture” process is required for each machine, and an “Omnidir-capture” on either of them. Once recorded, stop the processes, and copy the “capture0” directory to a common directory in the machine where synchronisation is to be carried out. One of the captures will have to be renamed to “capture1” (**NOTE: consistency is key here!**). Copy “omni” outside, i.e. to the common  folder, so that three subfolders should remain: capture0, capture1 and omni. Each “capture0” and “1” contain “ir”, “rgb” and “depth” folders inside, as already described.
+
+**NEW way:** `launch.py` script takes care of all of this.
 
 **NOTE:** Before starting the recording on several machines, and to facilitate synchornisation afterwards, check both/all machines are in the same time zone, and that their hardware clock is not deviating much. This will avoid having to rename files, and problems in fine-tuing the syncing. Also, please check the deviation between the local machine time and the Internet time (NTP) is less than 1 second.
 
