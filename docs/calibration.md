@@ -40,7 +40,7 @@ Therefore, with a “single” new image, and using the pre-recorded images, the
 
 ## 4. Running MATLAB calibration
 
-Once adapted, the calibration app within MATLAB should be able to give an output for calibrating a single camera. The parameters to give are: for each Kinect in “options” chose “3 coefficients” and “tangential”. Fot the omnidirectional camera chose the “fisheye” model instead of “standard”. Select 'high' image distortion when prompted. While selecting the outliers, use the general rule of eliminating images to get an error of less than 1 pixel for the omni images, and less than 0.5 pixels for the kinect images.
+Once adapted, the calibration app within MATLAB should be able to give an output for calibrating a single camera. The parameters to give are: for each Kinect in “options” chose “3 coefficients” and “tangential”. For the omnidirectional camera chose the “fisheye” model instead of “standard”. Select 'high' image distortion when prompted. While selecting the outliers, use the general rule of eliminating images to get an error of less than 1 pixel for the omni images, and less than 0.5 pixels for the kinect images.
 
 In all three calibrations, chose to store the result in a variable in the working space (last button in the app menu bar). Give each variable a different name. From the Matlab console run:
 
