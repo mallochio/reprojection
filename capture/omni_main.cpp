@@ -66,7 +66,7 @@ int main(int argc, char** argv) {
             if(ret) {
                 // cv::imshow("camera", image);
                 std::stringstream ss_rgb;
-                ss_rgb << work_path << "/omni/" << mseconds_epoch << ".jpg";
+                ss_rgb << work_path << "/" << mseconds_epoch << ".jpg";
                 std::thread(write_image, ss_rgb.str(), image).detach();
             } else {
                 std::cerr << "Error: could not capture frame" << std::endl;
