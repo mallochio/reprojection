@@ -1,5 +1,6 @@
-# Added by Pau (vscode)
+# Added by Pau (vscode, PKLs)
 .vscode/
+*.pkl
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
