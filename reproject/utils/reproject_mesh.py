@@ -142,8 +142,28 @@ def plot_mesh_3D(x, y, z, dst_filepath):
     fig.write_html(dst_filepath)
 
 
+def get_z_randomly(depth_img_mesh, camera_distance_lookup):
+    camera_distance = random.sample(camera_distance_lookup.keys(), 1)[0]
+    pointX, pointY  = camera_distance_lookup[camera_distance]
+    ix = np.where(depth_img_mesh[0] == pointX)
+
+    if depth_img_mesh[1, ix] == pointY:
+        z = depth_img_mesh[2, ix]
+    return z, camera_distance
+
+
+
+
 def scale_depth(depth_img, pcloud):
-    pass
+    scales = []
+    for i in range(1000):
+        z1, cam_dist1 = get_z_randomly(depth_img_mesh, camera_distance_lookup)
+        z2, cam_dist2 = get_z_randomly(depth_img_mesh, camera_distance_lookup)
+        print(z1, cam_dist1, z2, cam_dist2)
+        scale = (z1 - z2) / (cam_dist1 - cam_dist2)
+        print(scale)
+        scales.append(scale)
+
 
 
 def main():
