@@ -5,6 +5,7 @@ import os
 import pandas as pd
 from PIL import Image
 import matplotlib.pyplot as plt
+import plotly_express as px
 from config.load_config import load_config
 
 
@@ -25,7 +26,7 @@ def undistort_and_project_points(params, x, y):
         src=np.vstack((x, y)).astype(np.float64),
         cameraMatrix=intrinsics,
         distCoeffs=distortion,
-    ) 
+    )
     x, y = np.squeeze(np.array(temp), axis=1).T
     return x, y
 
@@ -65,7 +66,7 @@ def transform_RGBimgcoords_to_depthimgcoords(
     ### Step 3 - Transform the depth camera coordinates to the depth image coordinates
     distortion = get_distortion_matrix(depth_params)
     depth_intrinsics = np.array(depth_params["IntrinsicMatrix"]).T
-    
+
     # Distorts and projects the points into image coordinates
     points, _ = cv2.projectPoints(
         depth_camera_coordinates,
@@ -125,6 +126,26 @@ def make_bordered_img(depth_img, rgb_img):
     return depth_bigger
 
 
+def plot_mesh_on_img_2D(img, x, y):
+    implot = plt.imshow(img)
+    plt.scatter(x=x, y=y, c="cornflowerblue", s=0.5)
+    plt.show()
+
+
+def plot_mesh_3D(x, y, z, dst_filepath):
+    fig = px.scatter_3d(x=x, y=y, z=z)
+    fig.update_traces(marker={"size": 1})
+    # fig.update_layout(
+    #     autosize=False,
+    #     width=500,
+    #     height=500)
+    fig.write_html(dst_filepath)
+
+
+def scale_depth(depth_img, pcloud):
+    pass
+
+
 def main():
     config = load_config()
     params_file = config["stereo_params_k0"]
@@ -152,10 +173,8 @@ def main():
         R=rot,
         T=trans,
     )
-
-    implot = plt.imshow(depth_bigger)
-    plt.scatter(x=depthX, y=depthY, c="cornflowerblue", s=0.5)
-    plt.show()
+    plot_mesh_on_img_2D(depth_bigger, depthX, depthY)
+    plot_mesh_3D(depthX, depthY, depthZ, dst_filepath="/home/sid/mesh.html")
 
 
 if __name__ == "__main__":
