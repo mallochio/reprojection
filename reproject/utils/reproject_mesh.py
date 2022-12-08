@@ -2,6 +2,8 @@ import numpy as np
 import cv2
 import json
 import os
+import statistics
+import random
 import pandas as pd
 from PIL import Image
 import matplotlib.pyplot as plt
@@ -142,28 +144,46 @@ def plot_mesh_3D(x, y, z, dst_filepath):
     fig.write_html(dst_filepath)
 
 
-def get_z_randomly(depth_img_mesh, camera_distance_lookup):
-    camera_distance = random.sample(camera_distance_lookup.keys(), 1)[0]
-    pointX, pointY  = camera_distance_lookup[camera_distance]
-    ix = np.where(depth_img_mesh[0] == pointX)
-
+def get_z_randomly(depth_img_mesh, camera_distance_map):
+    camera_distance = random.sample(camera_distance_map.keys(), 1)[0]
+    pointX, pointY = camera_distance_map[camera_distance]
+    ix = np.where(depth_img_mesh[0] == pointX)[0][0]  # get the index of the first point in the mesh that has the same x coordinate as the pointX
     if depth_img_mesh[1, ix] == pointY:
         z = depth_img_mesh[2, ix]
     return z, camera_distance
 
 
-
-
-def scale_depth(depth_img, pcloud):
+def scale_depth(depth_img_mesh, camera_distance_map):
     scales = []
     for i in range(1000):
-        z1, cam_dist1 = get_z_randomly(depth_img_mesh, camera_distance_lookup)
-        z2, cam_dist2 = get_z_randomly(depth_img_mesh, camera_distance_lookup)
-        print(z1, cam_dist1, z2, cam_dist2)
-        scale = (z1 - z2) / (cam_dist1 - cam_dist2)
-        print(scale)
-        scales.append(scale)
+        z1, cam_dist1 = get_z_randomly(depth_img_mesh, camera_distance_map)
+        z2, cam_dist2 = get_z_randomly(depth_img_mesh, camera_distance_map)
+        if cam_dist1 != cam_dist2:
+            scale = (z1 - z2) / (cam_dist1 - cam_dist2)
+            scales.append(scale)
 
+    return statistics.mode(scales)
+
+
+def get_camera_distance_map(depth_img, depthX, depthY):
+    # Get a dictionary of camera distance of the mesh and the corresponding pixel coordinates
+    camera_distance_map = {}
+    for i, j in zip(depthX, depthY):
+        if 0 <= i < 512 and 0 <= j < 424:
+            camera_distance_map[depth_img[int(j), int(i)]] = (i, j)
+    return camera_distance_map
+
+
+def shift_mesh_to_smaller_depth_img(rgb_img, depth_img, depthX, depthY):
+    # Doing this because the depth image used to calibrate the camera is
+    # made larger using borders, so the projected mesh points are also to be shifted
+    r, c, _ = rgb_img.shape
+    nr, nc = depth_img.shape
+    xmin, xmax = int(c / 2 - nc / 2), int(c / 2 + nc / 2)
+    ymin, ymax = int(r / 2 - nr / 2), int(r / 2 + nr / 2)
+    depthX -= xmin
+    depthY -= ymin
+    return depthX, depthY
 
 
 def main():
@@ -176,7 +196,7 @@ def main():
 
     rgb_img = cv2.imread(os.path.join(rgb_images_dir, random_img))
     depth_img = get_depth_image(random_img, depth_images_dir)
-    depth_bigger = make_bordered_img(depth_img, rgb_img)
+
     pcloud = get_pointcloud(random_img, pickle_dir)
 
     with open(params_file, "r") as fh:
@@ -193,8 +213,21 @@ def main():
         R=rot,
         T=trans,
     )
-    plot_mesh_on_img_2D(depth_bigger, depthX, depthY)
-    plot_mesh_3D(depthX, depthY, depthZ, dst_filepath="/home/sid/mesh.html")
+
+    # depth_bigger = make_bordered_img(depth_img, rgb_img)
+    # plot_mesh_on_img_2D(depth_bigger, depthX, depthY)
+    # plot_mesh_3D(depthX, depthY, depthZ, dst_filepath="/home/sid/mesh.html")
+
+    # Shifting the mesh points to a depth image of original size
+    depthX, depthY = shift_mesh_to_smaller_depth_img(rgb_img, depth_img, depthX, depthY)
+    depthZ_shifted = depthZ - min(
+        depthZ
+    )  # shifting the depth values to start from 0; not sure if required
+    depth_img_mesh = np.vstack((depthX, depthY, depthZ_shifted))
+
+    camera_distance_map = get_camera_distance_map(depth_img, depthX, depthY)
+    scale = scale_depth(depth_img_mesh, camera_distance_map)
+    print(f"Scale: {scale}")
 
 
 if __name__ == "__main__":
