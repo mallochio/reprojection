@@ -48,7 +48,10 @@ def _calculate_median_background_depth(depth_images, base_dir, k_idx):
         for i, image_file in tqdm(enumerate(list_images)):
             image = np.float32(cv2.imread(image_file, cv2.CV_16UC1))
             if image is not None:
-                images[i, :, :] = cv2.flip(image, 1)
+                try:
+                    images[i, :, :] = cv2.flip(image, 1)
+                except:
+                    print('Error reading image %s' % image_file)
             else:
                 print("Warning: Some sampled depth images could not be loaded!")
 
