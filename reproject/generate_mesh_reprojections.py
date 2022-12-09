@@ -18,6 +18,7 @@ from utils.framekeeper import FrameKeeper
 from utils import omni
 from utils import kinect
 import utils.morphology as morphology
+from utils.reproject_mesh import get_mesh_in_depth_coordinates
 
 
 # Destination image size
@@ -31,7 +32,7 @@ base_dir = config["base_dir"]
 debug = False  # Show additional information
 
 
-def project_kinect_to_omni(frames, k_idx, fk):
+def get_depth_visible(frames, k_idx, fk):
     depth = np.float32(cv2.flip(frames["capture%d" % k_idx], 1))
     depth = cv2.undistort(
         depth, fk.kinect_params[k_idx]["K"], fk.kinect_params[k_idx]["D"]
@@ -39,41 +40,28 @@ def project_kinect_to_omni(frames, k_idx, fk):
 
     cv2.imshow("depth_ud", depth)
     background = fk.empty_depth[k_idx].copy()
-
     depth_visible = np.uint8((depth / 4500.0) * 255.0)
-    # cv2.imshow('depth image%d' % k_idx, cv2.resize(depth_visible, dsize=dsize))
+    return depth, depth_visible
 
-    # Densepose AVAILABLE
-    # mask = cv2.flip(frames['_capture%d_rgb_densepose' % k_idx][:,:,0], 1)
-    # mask = np.logical_and(mask, motion_mask)
 
-    # No Densepose EXISTS
-    # motion_mask = morphology.generate_mask(depth, background, cc=True)
-    # mask = motion_mask
-
-    print([frames[f"capture{n}"].shape for n in range(2)])
-
+def get_masked_depth_and_binary(depth, mask):
     masked_depth = np.zeros_like(depth)
     masked_depth[mask > 0] = depth[mask > 0]
-    # valid = df.proximity_filter_fast(masked_depth, fk.kinect_params[k_idx]['k_params'])
-    # masked_depth = valid
-
     binary = np.uint8(np.uint8(masked_depth / 4500.0 * 255.0) > 0) * 255
-    # cv2.imshow('masked_depth%d' % k_idx, cv2.resize(binary, dsize=dsize))
+    return masked_depth, binary
 
-    # Get world coordinates (metres) from mediandepth image (pixels x,y and z metres)
-    world_coordinates, valid_depth_coordinates = kinect.depth_to_world(
-        masked_depth, depth, fk.kinect_params[k_idx]["k_params"]
-    )  # k_params is (fx, fy, cx, cy) from intrinsics matrix
 
-    # X, Y = omni.world_to_omni_scaramuzza(fk.Ts[k_idx], world_co ordinates, fk.omni_params[k_idx], uw, uh)
+def project_kinect_to_omni(frames, k_idx, fk):
+    depth, depth_visible = get_depth_visible(frames, k_idx, fk)
+    print([frames[f"capture{n}"].shape for n in range(2)])
+    masked_depth, binary = get_masked_depth_and_binary(depth, mask)
+
+    # Get camera coordinates in depth image space
+    depth_camera_coordinates = get_mesh_in_depth_coordinates()
     X, Y = omni.world_to_omni_scaramuzza_fast(
-        fk.Ts[k_idx], world_coordinates, fk.omni_params[k_idx], uw, uh
+        fk.Ts[k_idx], depth_camera_coordinates, fk.omni_params[k_idx], uw, uh
     )
-
-    X = np.real(X)
-    Y = np.real(Y)
-
+    X, Y = np.real(X), np.real(Y)
     return np.int32(np.round(X)), np.int32(np.round(Y)), depth_visible, binary
 
 

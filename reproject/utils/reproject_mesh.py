@@ -198,7 +198,7 @@ def get_mesh_in_depth_coordinates():
     # TODO:
     # 1. Make this run on multiple images with the framekeeper class
     # 2. Complete correctly scaling the Z-axis and the camera distances
-
+    config = load_config()
     params_file = config["stereo_params_k0"]
     pickle_dir = config["pickle_dir"]
     depth_images_dir = config["depth_images_dir"]
