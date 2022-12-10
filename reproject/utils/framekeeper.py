@@ -130,7 +130,8 @@ class FrameKeeper(object):
 
                 # Load the frame set for the densepose masks
                 file_set_dp = sorted(glob('%s/%s/depth-dp-masks/*' % (base_dir, capture_name)))[1:]
-                if len(file_set_dp) > 0:
+          
+                if len(file_set_dp) > 0:                    
                     capture_mod_name = '_%s_rgb_densepose' % capture_name
                     self._ts_diffs[capture_mod_name] = syncro_data[capture_name]['diff_to_lead']
                     self._add_frameset(capture_mod_name, file_set_dp, cv2.CV_8UC3)

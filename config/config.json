@@ -1,7 +1,7 @@
 {
-   "base_dir": "/home/pau/Escriptori/recording-2022-08-11-001",
+   "base_dir": "/home/sid/Projects/OmniScience/dataset/2022-10-06/bedroom/sid/round1",
    "stereo_params_k0": "/home/sid/Projects/OmniScience/other/frankmocap/test-setup/stereoParams_k0_correctlysized.json",
-   "pickle_dir": "/home/sid/Projects/OmniScience/other/frankmocap/test-setup/Rendering-17-Nov/mocap",
+   "pickle_dir": "/home/sid/Projects/OmniScience/dataset/2022-10-06/bedroom/sid/round1/capture0/mocap",
    "depth_images_dir": "/home/sid/Projects/OmniScience/dataset/2022-10-06/bedroom/sid/round1/capture0/depth",
    "rgb_images_dir": "/home/sid/Projects/OmniScience/dataset/2022-10-06/bedroom/sid/round1/capture0/rgb"
 }

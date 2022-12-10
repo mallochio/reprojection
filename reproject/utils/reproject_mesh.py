@@ -1,3 +1,10 @@
+import sys
+from os.path import abspath
+
+sys.path.append(abspath("."))
+sys.path.append(abspath(".."))
+
+
 import numpy as np
 import cv2
 import json
@@ -194,62 +201,60 @@ def shift_mesh_to_original_depth_img_size(rgb_img, depth_img, depthX, depthY):
     return depthX, depthY
 
 
-def get_mesh_in_depth_coordinates():
+def get_mesh_in_depth_coordinates(config):
     # TODO:
     # 1. Make this run on multiple images with the framekeeper class
+        # a. Need to make the config just accept one base directory and not have depth and rgb images
     # 2. Complete correctly scaling the Z-axis and the camera distances
-    config = load_config()
+    need_image_coordinates_flag = False
     params_file = config["stereo_params_k0"]
     pickle_dir = config["pickle_dir"]
     depth_images_dir = config["depth_images_dir"]
     rgb_images_dir = config["rgb_images_dir"]
-    random_img = "1665057394063.jpg"  # selecting one random image from the pickle_dir
-    need_image_coordinates_flag = False
+    
+    # image = "1665057394063.jpg"  # selecting one random image from the pickle_dir
+    mocap_images = [''.join((i.split('_')[0], '.jpg')) for i in os.listdir(pickle_dir)]
+    for image in mocap_images:
+        rgb_img = cv2.imread(os.path.join(rgb_images_dir, image))
+        depth_img = get_depth_image(image, depth_images_dir)
+        pcloud = get_pointcloud(image, pickle_dir)
 
-    rgb_img = cv2.imread(os.path.join(rgb_images_dir, random_img))
-    depth_img = get_depth_image(random_img, depth_images_dir)
+        with open(params_file, "r") as fh:
+            params = json.load(fh)
 
-    pcloud = get_pointcloud(random_img, pickle_dir)
-
-    with open(params_file, "r") as fh:
-        params = json.load(fh)
-
-    rot = np.array(params["RotationOfCamera2"])
-    trans = np.array(params["TranslationOfCamera2"]).reshape(1, 3)
-
-    depthX, depthY, depthZ = transform_RGBimgcoords_to_depthcoords(
-        pcloud,
-        depth_frame=depth_img,
-        depth_params=params["CameraParameters2"],
-        color_params=params["CameraParameters1"],
-        R=rot,
-        T=trans,
-        need_image_coordinates=need_image_coordinates_flag,
-    )
-    if need_image_coordinates_flag:
-        # depth_bigger = make_bordered_img(depth_img, rgb_img)
-        # plot_mesh_on_img_2D(depth_bigger, depthX, depthY)
-        # plot_mesh_3D(depthX, depthY, depthZ, dst_filepath="/home/sid/mesh.html")
-
-        # Shifting the mesh to a depth image of original size
-        depthX, depthY = shift_mesh_to_original_depth_img_size(
-            rgb_img, depth_img, depthX, depthY
+        depthX, depthY, depthZ = transform_RGBimgcoords_to_depthcoords(
+            pcloud,
+            depth_frame=depth_img,
+            depth_params=params["CameraParameters2"],
+            color_params=params["CameraParameters1"],
+            R=np.array(params["RotationOfCamera2"]),
+            T=np.array(params["TranslationOfCamera2"]).reshape(1, 3),
+            need_image_coordinates=need_image_coordinates_flag,
         )
-        # shifting the depth values to start from 0; not sure if required
-        depthZ_shifted = depthZ - min(depthZ)
-        depth_img_mesh = np.vstack((depthX, depthY, depthZ_shifted))
+        if need_image_coordinates_flag:
+            # depth_bigger = make_bordered_img(depth_img, rgb_img)
+            # plot_mesh_on_img_2D(depth_bigger, depthX, depthY)
+            # plot_mesh_3D(depthX, depthY, depthZ, dst_filepath="/home/sid/mesh.html")
 
-        # Getting the camera distance of the mesh
-        camera_distance_map = get_camera_distance_map(depth_img, depthX, depthY)
-        scale = scale_depth(depth_img_mesh, camera_distance_map)
-        print(f"Scale: {scale}")
-        # for now, not doing anything to scale/measure camera distance of the mesh
+            # Shifting the mesh to a depth image of original size
+            depthX, depthY = shift_mesh_to_original_depth_img_size(
+                rgb_img, depth_img, depthX, depthY
+            )
+            # shifting the depth values to start from 0; not sure if required
+            depthZ_shifted = depthZ - min(depthZ) # shifting the depth values to start from 0
+            depth_img_mesh = np.vstack((depthX, depthY, depthZ_shifted))
 
-    return depthX, depthY, depthZ
+            # Getting the camera distance of the mesh
+            camera_distance_map = get_camera_distance_map(depth_img, depthX, depthY)
+            scale = scale_depth(depth_img_mesh, camera_distance_map)
+            print(f"Scale: {scale}")
+
+        return depthX, depthY, depthZ
 
 
 def main():
-    depthX, depthY, depthZ = get_mesh_in_depth_coordinates()
+    config = load_config()
+    depthX, depthY, depthZ = get_mesh_in_depth_coordinates(config)
 
 
 if __name__ == "__main__":
