@@ -136,6 +136,9 @@ class FrameKeeper(object):
                     self._ts_diffs[capture_mod_name] = syncro_data[capture_name]['diff_to_lead']
                     self._add_frameset(capture_mod_name, file_set_dp, cv2.CV_8UC3)
 
+                # TODO: Load the frame set for the frankmocap meshes
+
+    
                 # Load the kinect camera parameters
                 self.kinect_params[k_idx] = lomat.get_mono_calibration_matrices('%s/k%dParams.json' % (base_dir, k_idx))
 

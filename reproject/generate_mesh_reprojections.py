@@ -64,7 +64,10 @@ def get_mask(frames, k_idx, fk, depth):
 
 
 def project_kinect_to_omni(frames, k_idx, fk):
+    print(frames.keys())
+    print(blah)
     depth, depth_visible = get_depth_visible(frames, k_idx, fk)
+
     # mask = get_mask(frames, k_idx, fk, depth)
     # masked_depth, binary = get_masked_depth_and_binary(depth, mask)
     binary = np.uint8(np.uint8(depth / 4500.0 * 255.0) > 0) * 255
