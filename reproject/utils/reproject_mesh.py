@@ -18,6 +18,7 @@ import plotly.express as px
 from config.load_config import load_config
 
 
+config = load_config()
 params_file = config["stereo_params_k0"]
 pickle_dir = config["pickle_dir"]
 depth_images_dir = config["depth_images_dir"]
@@ -124,6 +125,7 @@ def get_SMPL_vertices_in_img_coords(pickle_files):
 def get_pointcloud(image, pickle_dir):
     # Get the point cloud in RGB image coordinates for a given image
     # Uses caching to speed up the process
+    global mesh_img_coord_dict  # TODO - remove global variable and cache the dictionary
     if image in mesh_img_coord_dict:
         pcloud = mesh_img_coord_dict[image]
     else:
@@ -224,7 +226,7 @@ def get_mesh_in_depth_coordinates(config, pickle_file, need_image_coordinates_fl
     # for image in mocap_images:
     directory, filename = os.path.split(pickle_file)
     
-    image = [''.join((filename.split('_')[0], '.jpg'))]
+    image = [''.join((filename.split('_')[0], '.jpg'))][0]
     rgb_img = cv2.imread(os.path.join(rgb_images_dir, image))
     depth_img = get_depth_image(image, depth_images_dir)
     pcloud = get_pointcloud(image, pickle_dir)
@@ -263,7 +265,6 @@ def get_mesh_in_depth_coordinates(config, pickle_file, need_image_coordinates_fl
 
 
 def main():
-    config = load_config()
     depthX, depthY, depthZ = get_mesh_in_depth_coordinates(config)
 
 

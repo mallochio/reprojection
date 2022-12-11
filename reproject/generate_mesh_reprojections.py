@@ -18,6 +18,7 @@ from utils.framekeeper import FrameKeeper
 from utils import omni
 from utils import kinect
 import utils.morphology as morphology
+from utils import reproject_mesh
 from utils.reproject_mesh import get_mesh_in_depth_coordinates
 
 ############
