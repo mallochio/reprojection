@@ -14,8 +14,15 @@ import random
 import pandas as pd
 from PIL import Image
 import matplotlib.pyplot as plt
-import plotly_express as px
+import plotly.express as px
 from config.load_config import load_config
+
+
+params_file = config["stereo_params_k0"]
+pickle_dir = config["pickle_dir"]
+depth_images_dir = config["depth_images_dir"]
+rgb_images_dir = config["rgb_images_dir"]
+mesh_img_coord_dict  = {}
 
 
 def get_distortion_matrix(params):
@@ -99,9 +106,7 @@ def transform_RGBimgcoords_to_depthcoords(
 def read_pickles(pickle_dir):
     # Function to read frankmocap pickle files
     pickle_files = os.listdir(pickle_dir)
-    pickle_files = [
-        os.path.join(pickle_dir, f) for f in pickle_files if f.endswith(".pkl")
-    ]
+    pickle_files = [os.path.join(pickle_dir, f) for f in pickle_files if f.endswith(".pkl")]
     return pickle_files
 
 
@@ -117,9 +122,15 @@ def get_SMPL_vertices_in_img_coords(pickle_files):
 
 
 def get_pointcloud(image, pickle_dir):
-    pickle_files = read_pickles(pickle_dir)
-    img_coord_dict = get_SMPL_vertices_in_img_coords(pickle_files)
-    return img_coord_dict[image]
+    # Get the point cloud in RGB image coordinates for a given image
+    # Uses caching to speed up the process
+    if image in mesh_img_coord_dict:
+        pcloud = mesh_img_coord_dict[image]
+    else:
+        pickle_files = read_pickles(pickle_dir)
+        mesh_img_coord_dict = get_SMPL_vertices_in_img_coords(pickle_files)
+        pcloud = mesh_img_coord_dict[image]
+    return pcloud
 
 
 def get_depth_image(image, depth_dir):
@@ -201,55 +212,54 @@ def shift_mesh_to_original_depth_img_size(rgb_img, depth_img, depthX, depthY):
     return depthX, depthY
 
 
-def get_mesh_in_depth_coordinates(config):
+def get_mesh_in_depth_coordinates(config, pickle_file, need_image_coordinates_flag = False):
     # TODO:
     # 1. Make this run on multiple images with the framekeeper class
         # a. Need to make the config just accept one base directory and not have depth and rgb images
     # 2. Complete correctly scaling the Z-axis and the camera distances
-    need_image_coordinates_flag = False
-    params_file = config["stereo_params_k0"]
-    pickle_dir = config["pickle_dir"]
-    depth_images_dir = config["depth_images_dir"]
-    rgb_images_dir = config["rgb_images_dir"]
     
     # image = "1665057394063.jpg"  # selecting one random image from the pickle_dir
-    mocap_images = [''.join((i.split('_')[0], '.jpg')) for i in os.listdir(pickle_dir)]
-    for image in mocap_images:
-        rgb_img = cv2.imread(os.path.join(rgb_images_dir, image))
-        depth_img = get_depth_image(image, depth_images_dir)
-        pcloud = get_pointcloud(image, pickle_dir)
+    # To run on multiple images # TODO: incomplete
+    # mocap_images = [''.join((i.split('_')[0], '.jpg')) for i in os.listdir(pickle_dir)]
+    # for image in mocap_images:
+    directory, filename = os.path.split(pickle_file)
+    
+    image = [''.join((filename.split('_')[0], '.jpg'))]
+    rgb_img = cv2.imread(os.path.join(rgb_images_dir, image))
+    depth_img = get_depth_image(image, depth_images_dir)
+    pcloud = get_pointcloud(image, pickle_dir)
 
-        with open(params_file, "r") as fh:
-            params = json.load(fh)
+    with open(params_file, "r") as fh:
+        params = json.load(fh)
 
-        depthX, depthY, depthZ = transform_RGBimgcoords_to_depthcoords(
-            pcloud,
-            depth_frame=depth_img,
-            depth_params=params["CameraParameters2"],
-            color_params=params["CameraParameters1"],
-            R=np.array(params["RotationOfCamera2"]),
-            T=np.array(params["TranslationOfCamera2"]).reshape(1, 3),
-            need_image_coordinates=need_image_coordinates_flag,
+    depthX, depthY, depthZ = transform_RGBimgcoords_to_depthcoords(
+        pcloud,
+        depth_frame=depth_img,
+        depth_params=params["CameraParameters2"],
+        color_params=params["CameraParameters1"],
+        R=np.array(params["RotationOfCamera2"]),
+        T=np.array(params["TranslationOfCamera2"]).reshape(1, 3),
+        need_image_coordinates=need_image_coordinates_flag,
+    )
+    if need_image_coordinates_flag:
+        # depth_bigger = make_bordered_img(depth_img, rgb_img)
+        # plot_mesh_on_img_2D(depth_bigger, depthX, depthY)
+        # plot_mesh_3D(depthX, depthY, depthZ, dst_filepath="/home/sid/mesh.html")
+
+        # Shifting the mesh to a depth image of original size
+        depthX, depthY = shift_mesh_to_original_depth_img_size(
+            rgb_img, depth_img, depthX, depthY
         )
-        if need_image_coordinates_flag:
-            # depth_bigger = make_bordered_img(depth_img, rgb_img)
-            # plot_mesh_on_img_2D(depth_bigger, depthX, depthY)
-            # plot_mesh_3D(depthX, depthY, depthZ, dst_filepath="/home/sid/mesh.html")
+        # shifting the depth values to start from 0; not sure if required
+        depthZ_shifted = depthZ - min(depthZ) # shifting the depth values to start from 0
+        depth_img_mesh = np.vstack((depthX, depthY, depthZ_shifted))
 
-            # Shifting the mesh to a depth image of original size
-            depthX, depthY = shift_mesh_to_original_depth_img_size(
-                rgb_img, depth_img, depthX, depthY
-            )
-            # shifting the depth values to start from 0; not sure if required
-            depthZ_shifted = depthZ - min(depthZ) # shifting the depth values to start from 0
-            depth_img_mesh = np.vstack((depthX, depthY, depthZ_shifted))
+    # Getting the camera distance of the mesh
+    # camera_distance_map = get_camera_distance_map(depth_img, depthX, depthY)
+    # scale = scale_depth(depth_img_mesh, camera_distance_map)
+    # print(f"Scale: {scale}")
 
-            # Getting the camera distance of the mesh
-            camera_distance_map = get_camera_distance_map(depth_img, depthX, depthY)
-            scale = scale_depth(depth_img_mesh, camera_distance_map)
-            print(f"Scale: {scale}")
-
-        return depthX, depthY, depthZ
+    return depthX, depthY, depthZ
 
 
 def main():

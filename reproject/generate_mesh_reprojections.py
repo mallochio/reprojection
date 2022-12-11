@@ -20,6 +20,12 @@ from utils import kinect
 import utils.morphology as morphology
 from utils.reproject_mesh import get_mesh_in_depth_coordinates
 
+############
+## For debugging
+from icecream import ic
+from icecream import install
+install()
+###########
 
 # Destination image size - This is the omni's image size
 uw, uh = 1200, 900
@@ -47,9 +53,13 @@ def get_depth_visible(frames, k_idx, fk):
     return depth, depth_visible
 
 
-def get_masked_depth_and_binary(depth, mask):
-    masked_depth = np.zeros_like(depth)
-    masked_depth[mask > 0] = depth[mask > 0]
+def get_masked_depth_and_binary(depth, mask=None):
+    if mask:
+        masked_depth = np.zeros_like(depth)
+        masked_depth[mask > 0] = depth[mask > 0]
+    else:
+        masked_depth = depth
+
     binary = np.uint8(np.uint8(masked_depth / 4500.0 * 255.0) > 0) * 255
     return masked_depth, binary
 
@@ -64,16 +74,16 @@ def get_mask(frames, k_idx, fk, depth):
 
 
 def project_kinect_to_omni(frames, k_idx, fk):
-    print(frames.keys())
-    print(blah)
+
+    mesh_pickle_file = frames[f'_capture{k_idx}_frankmocap']
     depth, depth_visible = get_depth_visible(frames, k_idx, fk)
 
     # mask = get_mask(frames, k_idx, fk, depth)
-    # masked_depth, binary = get_masked_depth_and_binary(depth, mask)
-    binary = np.uint8(np.uint8(depth / 4500.0 * 255.0) > 0) * 255
+    mask = None
+    masked_depth, binary = get_masked_depth_and_binary(depth, mask)
     
     # Get camera coordinates in depth image space
-    depthX, depthY, depthZ = get_mesh_in_depth_coordinates(config)
+    depthX, depthY, depthZ = get_mesh_in_depth_coordinates(config, mesh_pickle_file)
     ones = np.ones_like(depthX)
     depth_camera_coordinates = np.stack([depthX, depthY, depthZ, ones], axis=1)
 
