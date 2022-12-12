@@ -19,10 +19,9 @@ from config.load_config import load_config
 
 
 config = load_config()
+base_dir = config["base_dir"]
 params_file = config["stereo_params_k0"]
-pickle_dir = config["pickle_dir"]
-depth_images_dir = config["depth_images_dir"]
-rgb_images_dir = config["rgb_images_dir"]
+
 mesh_img_coord_dict  = {}
 
 
@@ -129,6 +128,7 @@ def get_pointcloud(image, pickle_dir):
     if image in mesh_img_coord_dict:
         pcloud = mesh_img_coord_dict[image]
     else:
+        print('Generating a mesh lookup table. This is done once per kinect capture set.')
         pickle_files = read_pickles(pickle_dir)
         mesh_img_coord_dict = get_SMPL_vertices_in_img_coords(pickle_files)
         pcloud = mesh_img_coord_dict[image]
@@ -137,8 +137,9 @@ def get_pointcloud(image, pickle_dir):
 
 def get_depth_image(image, depth_dir):
     image = image.replace(".jpg", ".png")
-    file = os.path.join(depth_dir, image)
-    depth_img = np.array(256 * np.array(Image.open(file)) / 0x0FFF, dtype=np.uint8)
+    filepath = os.path.join(depth_dir, image)
+    imgarray = np.array(Image.open(filepath))
+    depth_img = np.array(256 * imgarray / 0x0FFF, dtype=np.uint8)
     return depth_img
 
 
@@ -214,18 +215,22 @@ def shift_mesh_to_original_depth_img_size(rgb_img, depth_img, depthX, depthY):
     return depthX, depthY
 
 
-def get_mesh_in_depth_coordinates(config, pickle_file, need_image_coordinates_flag = False):
+def get_directory_structure(k_idx):
+    rgb_images_dir = f'{base_dir}/capture{k_idx}/rgb'
+    depth_images_dir = f'{base_dir}/capture{k_idx}/depth'
+    pickle_dir = f'{base_dir}/capture{k_idx}/mocap_output/mocap'
+    return rgb_images_dir, depth_images_dir, pickle_dir
+
+
+
+def get_mesh_in_depth_coordinates(config, pickle_file, k_idx, need_image_coordinates_flag = False):
     # TODO:
     # 1. Make this run on multiple images with the framekeeper class
         # a. Need to make the config just accept one base directory and not have depth and rgb images
     # 2. Complete correctly scaling the Z-axis and the camera distances
-    
-    # image = "1665057394063.jpg"  # selecting one random image from the pickle_dir
-    # To run on multiple images # TODO: incomplete
-    # mocap_images = [''.join((i.split('_')[0], '.jpg')) for i in os.listdir(pickle_dir)]
-    # for image in mocap_images:
+
+    rgb_images_dir, depth_images_dir, pickle_dir = get_directory_structure(k_idx)
     directory, filename = os.path.split(pickle_file)
-    
     image = [''.join((filename.split('_')[0], '.jpg'))][0]
     rgb_img = cv2.imread(os.path.join(rgb_images_dir, image))
     depth_img = get_depth_image(image, depth_images_dir)
@@ -243,6 +248,7 @@ def get_mesh_in_depth_coordinates(config, pickle_file, need_image_coordinates_fl
         T=np.array(params["TranslationOfCamera2"]).reshape(1, 3),
         need_image_coordinates=need_image_coordinates_flag,
     )
+    
     if need_image_coordinates_flag:
         # depth_bigger = make_bordered_img(depth_img, rgb_img)
         # plot_mesh_on_img_2D(depth_bigger, depthX, depthY)

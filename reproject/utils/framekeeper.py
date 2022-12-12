@@ -138,9 +138,9 @@ class FrameKeeper(object):
                     self._add_frameset(capture_mod_name, file_set_dp, cv2.CV_8UC3)
 
                 # TODO: Load the frame set for the frankmocap meshes correctly
-                file_set_frankmocap = sorted(glob(f'{base_dir}/{capture_name}/mocap/*'))[1:]
+                file_set_frankmocap = sorted(glob(f'{base_dir}/{capture_name}/mocap_output/mocap/*'))[1:]
                 if len(file_set_frankmocap) > 0:
-                    capture_mod_name = '_%s_frankmocap' % capture_name
+                    capture_mod_name = f'_{capture_name}_frankmocap'
                     self._ts_diffs[capture_mod_name] = syncro_data[capture_name]['diff_to_lead']
                     self._add_frameset(capture_mod_name, file_set_frankmocap, cv2.CV_8UC3)
     
@@ -226,8 +226,7 @@ class FrameKeeper(object):
             if 'rgb' in name or 'omni' in name:
                 frames[name] = cv2.imread(filename)
             elif 'mocap' in name:
-                ic(filename)
-                frames[name] = filename
+                frames[name] = filename 
             else:
                 frames[name] = cv2.imread(filename, self._cvcodes[name])  # TODO could convert to float here.
             if debug:

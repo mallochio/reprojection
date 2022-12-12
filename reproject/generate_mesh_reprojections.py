@@ -75,7 +75,6 @@ def get_mask(frames, k_idx, fk, depth):
 
 
 def project_kinect_to_omni(frames, k_idx, fk):
-
     mesh_pickle_file = frames[f'_capture{k_idx}_frankmocap']
     depth, depth_visible = get_depth_visible(frames, k_idx, fk)
 
@@ -84,7 +83,7 @@ def project_kinect_to_omni(frames, k_idx, fk):
     masked_depth, binary = get_masked_depth_and_binary(depth, mask)
     
     # Get camera coordinates in depth image space
-    depthX, depthY, depthZ = get_mesh_in_depth_coordinates(config, mesh_pickle_file)
+    depthX, depthY, depthZ = get_mesh_in_depth_coordinates(config, mesh_pickle_file, k_idx)
     ones = np.ones_like(depthX)
     depth_camera_coordinates = np.stack([depthX, depthY, depthZ, ones], axis=1)
 
