@@ -128,7 +128,6 @@ def get_pointcloud(image, pickle_dir):
     if image in mesh_img_coord_dict:
         pcloud = mesh_img_coord_dict[image]
     else:
-        print('Generating a mesh lookup table. This is done once per kinect capture set.')
         pickle_files = read_pickles(pickle_dir)
         mesh_img_coord_dict = get_SMPL_vertices_in_img_coords(pickle_files)
         pcloud = mesh_img_coord_dict[image]
@@ -263,7 +262,8 @@ def get_mesh_in_depth_coordinates(config, pickle_file, k_idx, need_image_coordin
         depth_img_mesh = np.vstack((depthX, depthY, depthZ_shifted))
 
     # Getting the camera distance of the mesh
-    # camera_distance_map = get_camera_distance_map(depth_img, depthX, depthY)
+    camera_distance_map = get_camera_distance_map(depth_img, depthX, depthY)
+    
     # scale = scale_depth(depth_img_mesh, camera_distance_map)
     # print(f"Scale: {scale}")
 
