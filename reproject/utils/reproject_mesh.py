@@ -96,11 +96,10 @@ def transform_RGBimgcoords_to_depthcoords(
             distCoeffs=distortion,
         )
         depthX, depthY = np.squeeze(np.array(points), axis=1).T
-        depthZ = z_original
     else:
         depthX, depthY, depthZ = depth_camera_coordinates.T
 
-    return depthX, depthY, depthZ
+    return depthX, depthY, depthZ, z_original
 
 
 def read_pickles(pickle_dir):
@@ -238,7 +237,7 @@ def get_mesh_in_depth_coordinates(config, pickle_file, k_idx, need_image_coordin
     with open(params_file, "r") as fh:
         params = json.load(fh)
 
-    depthX, depthY, depthZ = transform_RGBimgcoords_to_depthcoords(
+    depthX, depthY, depthZ, pelvicZ = transform_RGBimgcoords_to_depthcoords(
         pcloud,
         depth_frame=depth_img,
         depth_params=params["CameraParameters2"],
@@ -257,16 +256,14 @@ def get_mesh_in_depth_coordinates(config, pickle_file, k_idx, need_image_coordin
         depthX, depthY = shift_mesh_to_original_depth_img_size(
             rgb_img, depth_img, depthX, depthY
         )
-        # shifting the depth values to start from 0; not sure if required
-        depthZ_shifted = depthZ - min(depthZ) # shifting the depth values to start from 0
-        depth_img_mesh = np.vstack((depthX, depthY, depthZ_shifted))
 
     # Getting the camera distance of the mesh
+    # depthZ = pelvicZ
+    depthZ_shifted = depthZ - min(depthZ) # shifting the depth values to start from 0
     camera_distance_map = get_camera_distance_map(depth_img, depthX, depthY)
-    
+
     # scale = scale_depth(depth_img_mesh, camera_distance_map)
     # print(f"Scale: {scale}")
-
     return depthX, depthY, depthZ
 
 

@@ -23,8 +23,7 @@ from utils.reproject_mesh import get_mesh_in_depth_coordinates
 
 ############
 ## For debugging
-from icecream import ic
-from icecream import install
+from icecream import ic, install
 install()
 ###########
 
