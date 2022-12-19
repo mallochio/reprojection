@@ -171,7 +171,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--square-width",
         type=float,
-        default=92,
+        default=96,
         required=False,
         help="Square width in mm",
     )
