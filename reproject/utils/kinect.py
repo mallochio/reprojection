@@ -7,10 +7,21 @@ rgb_image_size = (720, 1280)
 
 
 def depth_to_world_pts(y, x, depth_frame, depth_params):
+    """_summary_
+
+    Args:
+        y (_type_): _description_
+        x (_type_): _description_
+        depth_frame (_type_): _description_
+        depth_params (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
     depth_Fx, depth_Fy, depth_Cx, depth_Cy = depth_params
     world_coordinates = np.zeros((len(x), 4))
     z = depth_frame[y, x] / 1000.
-    
+
     world_coordinates[:, 0] = z * (x - depth_Cx) / depth_Fx
     world_coordinates[:, 1] = z * (y - depth_Cy) / depth_Fy
     world_coordinates[:, 2] = z
@@ -24,11 +35,25 @@ def depth_to_world_pts(y, x, depth_frame, depth_params):
 
 
 def depth_to_world(mask, depth_frame, depth_params):
+
     y, x = mask.nonzero()
     return depth_to_world_pts(y, x, depth_frame, depth_params)
 
 
 def get_depth_pixel_colors(world_coordinates, valid_depth_coordinates, color_frame, color_params, R, T):
+    """_summary_: Get the color values of the depth pixels
+
+    Args:
+        world_coordinates (_type_): _description_
+        valid_depth_coordinates (_type_): _description_
+        color_frame (_type_): _description_
+        color_params (_type_): _description_
+        R (_type_): _description_
+        T (_type_): _description_
+
+    Returns:
+        _type_: a depth image with the color values of the pixels from the original depth image transplanted from the RGB image
+    """
     rgb_Fx, rgb_Fy, rgb_Cx, rgb_Cy = color_params
     colorised_depth = np.zeros((ir_image_size[0], ir_image_size[1], 3))
     color_coordinates = np.dot(world_coordinates[:, :3], R.T) + (T / 1000.)
@@ -40,12 +65,27 @@ def get_depth_pixel_colors(world_coordinates, valid_depth_coordinates, color_fra
     rgbY[np.round(rgbY) >= rgb_h] = rgb_h-1
     rgbX[np.round(rgbX) >= rgb_w] = rgb_w-1
     colors = color_frame[np.int32(np.round(rgbY)), np.int32(np.round(rgbX))]
-    colorised_depth[valid_depth_coordinates[:, 1], valid_depth_coordinates[:, 0]] = colors
-
+    colorised_depth[valid_depth_coordinates[:, 1],
+                    valid_depth_coordinates[:, 0]] = colors
     return colorised_depth, colors
 
 
 def get_color_depth_values(world_coordinates, valid_depth_coordinates, color_frame, s, color_params, depth_frame, R, T):
+    """_summary_: Function to change the RGB image into a depth image
+
+    Args:
+        world_coordinates (_type_): _description_
+        valid_depth_coordinates (_type_): _description_
+        color_frame (_type_): _description_
+        s (_type_): _description_
+        color_params (_type_): _description_
+        depth_frame (_type_): _description_
+        R (_type_): _description_
+        T (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
     rgb_Fx, rgb_Fy, rgb_Cx, rgb_Cy = color_params
 
     color_coordinates = np.dot(world_coordinates[:, :3], R.T) + (T / 1000.)
@@ -71,5 +111,6 @@ def get_color_depth_values(world_coordinates, valid_depth_coordinates, color_fra
         depth_on_color[ry, rx] = rz
         map_to_depth[ry, rx, 0] = depthX
         map_to_depth[ry, rx, 1] = depthY
-
     return depth_on_color, map_to_depth
+
+

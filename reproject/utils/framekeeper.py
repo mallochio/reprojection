@@ -9,6 +9,7 @@ from random import sample
 from tqdm import tqdm
 
 
+
 def _wrap_image(image, new_h, new_w):
     """
     Creates a wrapped image of new_h x new_w with image image in the centre.
@@ -48,7 +49,10 @@ def _calculate_median_background_depth(depth_images, base_dir, k_idx):
         for i, image_file in tqdm(enumerate(list_images)):
             image = np.float32(cv2.imread(image_file, cv2.CV_16UC1))
             if image is not None:
-                images[i, :, :] = cv2.flip(image, 1)
+                try:
+                    images[i, :, :] = cv2.flip(image, 1)
+                except:
+                    print('Error reading image %s' % image_file)
             else:
                 print("Warning: Some sampled depth images could not be loaded!")
 
@@ -127,11 +131,19 @@ class FrameKeeper(object):
 
                 # Load the frame set for the densepose masks
                 file_set_dp = sorted(glob('%s/%s/depth-dp-masks/*' % (base_dir, capture_name)))[1:]
-                if len(file_set_dp) > 0:
+          
+                if len(file_set_dp) > 0:                    
                     capture_mod_name = '_%s_rgb_densepose' % capture_name
                     self._ts_diffs[capture_mod_name] = syncro_data[capture_name]['diff_to_lead']
                     self._add_frameset(capture_mod_name, file_set_dp, cv2.CV_8UC3)
 
+                # TODO: Load the frame set for the frankmocap meshes correctly
+                file_set_frankmocap = sorted(glob(f'{base_dir}/{capture_name}/mocap_output/mocap/*'))[1:]
+                if len(file_set_frankmocap) > 0:
+                    capture_mod_name = f'_{capture_name}_frankmocap'
+                    self._ts_diffs[capture_mod_name] = syncro_data[capture_name]['diff_to_lead']
+                    self._add_frameset(capture_mod_name, file_set_frankmocap, cv2.CV_8UC3)
+    
                 # Load the kinect camera parameters
                 self.kinect_params[k_idx] = lomat.get_mono_calibration_matrices('%s/k%dParams.json' % (base_dir, k_idx))
 
@@ -177,7 +189,10 @@ class FrameKeeper(object):
         self._frame_timestamps[name] = np.zeros(len(self._framesets[name]))
         for i, filepath in enumerate(self._framesets[name]):
             dirpath, filename = path.split(filepath)
-            timestamp = int(re.split('\.', filename)[0])
+            if '_result' not in filename:
+                timestamp = int(re.split('\.', filename)[0])
+            else:
+                timestamp = int(filename.split('_')[0])
             self._frame_timestamps[name][i] = timestamp / 1000.
         
     def _find_min_diff_ts_frame(self, name, timestamp):
@@ -204,13 +219,14 @@ class FrameKeeper(object):
         frames = {}
         frame_files = {}
         for name in self._framesets:
-
             ts_diff = self._ts_diffs[name]
             frame_idx = self._find_min_diff_ts_frame(name, timestamp+ts_diff)
             filename = self._framesets[name][frame_idx]
             frame_files[name] = filename
             if 'rgb' in name or 'omni' in name:
                 frames[name] = cv2.imread(filename)
+            elif 'mocap' in name:
+                frames[name] = filename 
             else:
                 frames[name] = cv2.imread(filename, self._cvcodes[name])  # TODO could convert to float here.
             if debug:
