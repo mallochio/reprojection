@@ -44,7 +44,7 @@ def check_selected_folder(route):
 def show_pick_folder_window():
 
     layout = [
-        [sg.Text('Working folder:'), sg.Input(key='txtFolder', disabled=True), sg.Button('Browse', key='btBrowse')],
+        [sg.Text('Working folder:'), sg.Input(key='txtFolder', disabled=True, enable_events=True), sg.FolderBrowse('Browse', key='btBrowse')],
         [sg.Text('Summary:', font='Arial 16')],
         [sg.Text('Kinect captures:'), sg.Text('', key='txtKinects')],
         [sg.Checkbox(" Sync'ed",key='chkSync', disabled=True)],
@@ -61,8 +61,8 @@ def show_pick_folder_window():
 
     while True:
         event, values = pick_folder_window.read()
-        if event == 'btBrowse':
-            route = sg.popup_get_folder('Pick a working folder', 'Select folder')
+        if event == 'txtFolder':
+            route = values['txtFolder']  # sg.popup_get_folder('Pick a working folder', 'Select folder')
             results = check_selected_folder(route)
             if len(results['errors']) != 0:
                 sg.popup_error(f"Errors were found in folder check: {results['errors']}")
@@ -83,7 +83,7 @@ def show_pick_folder_window():
         if event == 'btCont':
             if values['txtFolder'] == '':
                 sg.popup_error('Please select folder first.')
-            if values['chkCalib'] == False:
+            elif values['chkCalib'] == False:
                 sg.popup_error('Please calibrate set first.')
             
             pick_folder_window.close()
