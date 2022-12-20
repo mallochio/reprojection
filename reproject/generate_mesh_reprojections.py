@@ -63,6 +63,7 @@ def get_masked_depth_and_binary(depth, mask=None):
     binary = np.uint8(np.uint8(masked_depth / 4500.0 * 255.0) > 0) * 255
     return masked_depth, binary
 
+
 def get_mask(frames, k_idx, fk, depth):
     # Mask is the intersection of a motion mask and a densepose mask
     background = fk.empty_depth[k_idx].copy()
@@ -71,6 +72,19 @@ def get_mask(frames, k_idx, fk, depth):
     mask = cv2.flip(frames[f'_capture{k_idx}_rgb_densepose'][:,:,0], 1)
     mask = np.logical_and(mask, motion_mask)
     return mask
+
+
+def make_transformation_matrix(ix):
+    cam0_to_world_pth = config[f'k{ix}_depth_to_world_pth']
+    world_to_cam1_pth = config[f'k{ix}_world_to_omni_pth']
+
+    with open(cam0_to_world_pth, "rb") as f:
+        cam0_to_world = make_44(pickle.load(f))
+    with open(world_to_cam_pth, "rb") as f:
+        world_to_cam1 = make_44(pickle.load(f))
+    transform = cam0_to_world @ world_to_cam1
+    transform[:3, 3] = transform[:3, 3] / 1000.0
+    return transform
 
 
 def project_kinect_to_omni(frames, k_idx, fk):
@@ -82,16 +96,27 @@ def project_kinect_to_omni(frames, k_idx, fk):
     masked_depth, binary = get_masked_depth_and_binary(depth, mask)
     
     # Get camera coordinates in depth image space
-    depthX, depthY, depthZ = get_mesh_in_depth_coordinates(config, mesh_pickle_file, k_idx)
-    ones = np.ones_like(depthX)
-    depth_camera_coordinates = np.stack([depthX, depthY, depthZ, ones], axis=1)
+    depthX, depthY, depthZ = get_mesh_in_depth_coordinates(config, mesh_pickle_file, k_idx, need_image_coordinates_flag=True)
+    depth_camera_coordinates = np.stack([depthX, depthY, depthZ, np.ones_like(depthX)], axis=1)
 
-    X, Y = omni.world_to_omni_scaramuzza_fast(
-        fk.Ts[k_idx], 
-        depth_camera_coordinates, 
-        fk.omni_params[k_idx], 
-        uw, uh
+    # Project the mesh onto the omnidirectional camera frame using extrinsics.
+    transform = make_transformation_matrix(k_idx)
+    omni_camera_coordinates = transform @ depth_camera_coordinates.T
+
+    # Project the mesh onto the omnidirectional image frame.
+    omni_image_coordinates, _ = cv2.omnidir.projectPoints(
+        omni_camera_coordinates, 
+        np.zeros(3),
+        np.zeros(3),
+        fk.omni_params[k_idx]["K"], # intrinsics
+        fk.omni_params[k_idx]["D"], # distortion
+        fk.omni_params[k_idx]["xi"] 
     )
+
+    omni_image_coordinates = np.swapaxes(omni_image_coordinates, 0, 1)
+    omniX, omniY = omni_image_coordinates[0], omni_image_coordinates[1]
+
+    print(omniX, omniY)
 
     X, Y = np.real(X), np.real(Y)
     return np.int32(np.round(X)), np.int32(np.round(Y)), depth_visible, binary
@@ -116,7 +141,7 @@ def main():
     print("Timespan: t0 = %.3f, tf = %.3f (step = %.3f)" % (ts0, tsf, step))
 
     for ts in tqdm(fk.get_lead_span()):
-        out_frame = np.zeros((vid_size[1], vid_size[0], 3), dtype=np.uint8)
+        out_frame = np.zeros((vid_size[1], vid_size[0], 3), dtype=np.uint8) 
         side_frame = np.zeros((uh, uw * 2, 3), dtype=np.uint8)
 
         # Get a set of sync'ed frames

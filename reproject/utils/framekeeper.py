@@ -111,6 +111,7 @@ class FrameKeeper(object):
         print("Loading recording under '%s' ..." % base_dir)
         # Load calibration + syncronisation data
         syncro_data = syncro.get_timestamp_differences(base_dir)
+        
         for capture_name in syncro_data:
             print("Found capture '%s' ..." % capture_name)
 
@@ -142,8 +143,8 @@ class FrameKeeper(object):
                 if len(file_set_frankmocap) > 0:
                     capture_mod_name = f'_{capture_name}_frankmocap'
                     self._ts_diffs[capture_mod_name] = syncro_data[capture_name]['diff_to_lead']
-                    self._add_frameset(capture_mod_name, file_set_frankmocap, cv2.CV_8UC3)
-    
+                    self._add_frameset(capture_mod_name, file_set_frankmocap, None)
+
                 # Load the kinect camera parameters
                 self.kinect_params[k_idx] = lomat.get_mono_calibration_matrices('%s/k%dParams.json' % (base_dir, k_idx))
 
@@ -161,11 +162,11 @@ class FrameKeeper(object):
 
         # Obtain transformation matrix for omni-kinect camera pair
         self.omni_params = {}
-
         if path.exists('%s/omni0Params.json' % base_dir):
             for k_idx in range(self.num_kinects):
                 # Load the omnidirectional camera parameters
-                self.omni_params[k_idx] = lomat.get_omni_calibration_matrices('%s/omni%dParams.json' % (base_dir, k_idx))
+                self.omni_params[k_idx] = lomat.get_omni_calibration_matrices(k_idx)
+                # self.omni_params[k_idx] = lomat.get_omni_calibration_matrices('%s/omni%dParams.json' % (base_dir, k_idx))
         else:
             print("WARNING! No separate rotation files for each Kinect (wrt Omni)")
             for k_idx in range(self.num_kinects):
@@ -186,6 +187,7 @@ class FrameKeeper(object):
         self._cache_frameset(name)
 
     def _cache_frameset(self, name):
+        # Change frameset for mocap naming
         self._frame_timestamps[name] = np.zeros(len(self._framesets[name]))
         for i, filepath in enumerate(self._framesets[name]):
             dirpath, filename = path.split(filepath)
@@ -194,7 +196,7 @@ class FrameKeeper(object):
             else:
                 timestamp = int(filename.split('_')[0])
             self._frame_timestamps[name][i] = timestamp / 1000.
-        
+
     def _find_min_diff_ts_frame(self, name, timestamp):
         differences = np.abs(self._frame_timestamps[name] - timestamp)
         return np.argmin(differences)

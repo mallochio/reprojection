@@ -120,7 +120,7 @@ def get_mono_calibration_matrices(filename):
     return matrices
 
 
-def _parse_omni_parameters(params):
+def _parse_omni_parameters_matlab(params):
     omni = {}
 
     c0, c2, c3, c4 = params['Intrinsics']['MappingCoefficients']
@@ -141,7 +141,20 @@ def _parse_omni_parameters(params):
     return omni
 
 
-def get_omni_calibration_matrices(filename):
+def _parse_omni_parameters(params):
+    omni = {}
+    omni['R'] = np.asarray(params['R'])
+    omni['T'] = np.asarray(params['T'])
+    omni['K'] = np.asarray(params['intrinsics'])
+    omni['D'] = np.asarray(params['distortion'])
+    omni['xi'] = np.asarray(params['xi'])
+    return omni
+
+def get_omni_calibration_matrices(ix):
+    params = config[]
+    return _parse_omni_parameters(params)
+
+def get_omni_calibration_matrices_old(filename):
     dico = _load_calibrations(filename)
     params = _parse_omni_parameters(dico)
     return params
