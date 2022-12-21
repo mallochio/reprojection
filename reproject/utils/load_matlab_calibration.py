@@ -3,7 +3,9 @@ Script to load 'stereoParams' objects from MATLAB json-encoded files.
 """
 import json
 import numpy as np
+from config import load_config as conf
 
+config = conf.load_config()
 
 def _load_calibrations(filename):
     """
@@ -142,16 +144,17 @@ def _parse_omni_parameters_matlab(params):
 
 
 def _parse_omni_parameters(params):
-    omni = {}
-    omni['R'] = np.asarray(params['R'])
-    omni['T'] = np.asarray(params['T'])
-    omni['K'] = np.asarray(params['intrinsics'])
-    omni['D'] = np.asarray(params['distortion'])
-    omni['xi'] = np.asarray(params['xi'])
-    return omni
+    pass
+    # omni = {}
+    # omni['R'] = np.asarray(params['R'])
+    # omni['T'] = np.asarray(params['T'])
+    # omni['K'] = np.asarray(params['intrinsics'])
+    # omni['D'] = np.asarray(params['distortion'])
+    # omni['xi'] = np.asarray(params['xi'])
+    # return omni
 
 def get_omni_calibration_matrices(ix):
-    params = config[]
+    params = config['omni_params']
     return _parse_omni_parameters(params)
 
 def get_omni_calibration_matrices_old(filename):

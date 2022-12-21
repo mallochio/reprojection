@@ -165,7 +165,8 @@ class FrameKeeper(object):
         if path.exists('%s/omni0Params.json' % base_dir):
             for k_idx in range(self.num_kinects):
                 # Load the omnidirectional camera parameters
-                self.omni_params[k_idx] = lomat.get_omni_calibration_matrices(k_idx)
+                continue # TODO: Fix this
+                # self.omni_params[k_idx] = lomat.get_omni_calibration_matrices(k_idx)
                 # self.omni_params[k_idx] = lomat.get_omni_calibration_matrices('%s/omni%dParams.json' % (base_dir, k_idx))
         else:
             print("WARNING! No separate rotation files for each Kinect (wrt Omni)")
@@ -173,10 +174,11 @@ class FrameKeeper(object):
                 self.omni_params[k_idx] = lomat.get_omni_calibration_matrices('%s/omniParams.json' % base_dir)
 
         for k_idx in range(self.num_kinects):
-            self.Ts[k_idx] = _get_transformation_matrix(self.omni_params[k_idx]['RR'][0],
-                                                        self.omni_params[k_idx]['tt'][0],
-                                                        self.kinect_params[k_idx]['RR'][0],
-                                                        self.kinect_params[k_idx]['tt'][0])
+            self.Ts[k_idx] = None # TODO: Fix this
+            # self.Ts[k_idx] = _get_transformation_matrix(self.omni_params[k_idx]['RR'][0],
+            #                                             self.omni_params[k_idx]['tt'][0],
+            #                                             self.kinect_params[k_idx]['RR'][0],
+            #                                             self.kinect_params[k_idx]['tt'][0])
 
     def get_step_ms(self):
         return self._step_ms
