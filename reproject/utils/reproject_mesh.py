@@ -38,7 +38,7 @@ def get_distortion_matrix(params):
 def undistort_and_project_points(params, x, y):
     # Projects from image coordinates to camera coordinates
     distortion = params['distortion']
-    intrinsics = np.array(params["intrinsics"])
+    intrinsics = params["intrinsics"]
     temp = cv2.undistortPoints(
         src=np.vstack((x, y)).astype(np.float64),
         cameraMatrix=intrinsics,
@@ -69,7 +69,6 @@ def transform_RGBimgcoords_to_depthcoords(
 
     ### Step 1 - Transform the RGB image coordinates to the RGB camera coordinates
     x, y, z_original = pcloud.T
-    z = np.ones(z_original.shape)
 
     # Undistort and project the points
     rgb_camera_coordinates = np.zeros((len(x), 3))
@@ -77,30 +76,31 @@ def transform_RGBimgcoords_to_depthcoords(
 
     rgb_camera_coordinates[:, 0] = x
     rgb_camera_coordinates[:, 1] = y
-    rgb_camera_coordinates[:, 2] = z
+    rgb_camera_coordinates[:, 2] = np.ones(z_original.shape)
 
     ### Step 2 - Transform the RGB camera coordinates to the depth camera coordinates using the extrinsic stereo parameters
     depth_camera_coordinates = np.dot(rgb_camera_coordinates, R).T + (t / 1000.0)
 
     ### Step 3 - Transform the depth camera coordinates to the depth image coordinates
-    distortion = get_distortion_matrix(depth_params)
+    # distortion = get_distortion_matrix(depth_params)
     # depth_intrinsics = np.array(depth_params["IntrinsicMatrix"]).T
-    depth_intrinsics = np.array(depth_params["intrinsics"])
+    ic(depth_camera_coordinates.shape)
+    depthX, depthY, depthZ = depth_camera_coordinates
+    plot_mesh_3D(depthX, depthY, depthZ, dst_filepath="/home/sid/mesh-depth-cam1.html")
+    
+    distortion = depth_params['distortion']
+    depth_intrinsics = depth_params["intrinsics"]
 
-    if need_image_coordinates:
-        # Distorts and projects the points into image coordinates
-        points, _ = cv2.projectPoints(
-            depth_camera_coordinates,
-            rvec=(0, 0, 0),
-            tvec=(0, 0, 0),
-            cameraMatrix=depth_intrinsics,
-            distCoeffs=distortion,
-        )
-        depthX, depthY = np.squeeze(np.array(points), axis=1).T
-        depthZ = z_original
-    else:
-        depthX, depthY, depthZ = depth_camera_coordinates.T
-
+    # Distort and projects the points into image coordinates
+    points, _ = cv2.projectPoints(
+        depth_camera_coordinates,
+        rvec=(0, 0, 0),
+        tvec=(0, 0, 0),
+        cameraMatrix=depth_intrinsics,
+        distCoeffs=distortion,
+    )
+    depthX, depthY = np.squeeze(np.array(points), axis=1).T
+    depthZ = z_original
     return depthX, depthY, depthZ, z_original
 
 
@@ -256,7 +256,7 @@ def get_mesh_in_depth_coordinates(config, pickle_file, k_ix, need_image_coordina
         rgb_params = pd.read_pickle(fh)
 
     R, t = stereo_params['R'], stereo_params['t']
-    depthX, depthY, depthZ, pelvicZ = transform_RGBimgcoords_to_depthcoords(
+    depthX, depthY, depthZ, _ = transform_RGBimgcoords_to_depthcoords(
         pcloud,
         depth_frame=depth_img,
         depth_params=depth_params,#params["CameraParameters2"],
@@ -266,23 +266,18 @@ def get_mesh_in_depth_coordinates(config, pickle_file, k_ix, need_image_coordina
         need_image_coordinates=need_image_coordinates_flag,
     )
     
-    # depth_bigger = make_padded_img(depth_img, rgb_img)
-    # plot_mesh_on_img_2D(depth_bigger, depthX, depthY)
-
     # Getting the camera distance of the mesh    
     camera_distance_map = get_camera_distance_map(depth_img, depthX, depthY)
     if len(camera_distance_map):
         distances = [i[0] for i in camera_distance_map]
         avgdist = statistics.median(distances)
         depthZ = depthZ + avgdist
+    # depthZ = depthZ - min(depthZ) # shifting the depth values to start from 0
+    
+    plot_mesh_3D(depthX, depthY, depthZ, dst_filepath="/home/sid/mesh-depth-image.html")
 
     # Transform mesh from depth image coordinates to depth camera coordinates
     depthX, depthY = undistort_and_project_points(depth_params, depthX, depthY)
-    depthZ = pelvicZ
-    # depthZ = depthZ - min(depthZ) # shifting the depth values to start from 0
-    
-    # plot_mesh_3D(depthX, depthY, pelvicZ, dst_filepath="/home/sid/mesh.html")
-    # print(blah)
 
     # scale = scale_depth(depth_img_mesh, camera_distance_map)
     # print(f"Scale: {scale}")

@@ -20,7 +20,7 @@ from utils import omni
 from utils import kinect
 import utils.morphology as morphology
 from utils import reproject_mesh
-from utils.reproject_mesh import get_mesh_in_depth_coordinates
+from utils.reproject_mesh import get_mesh_in_depth_coordinates, plot_mesh_3D
 
 ############
 ## For debugging
@@ -87,7 +87,7 @@ def make_transformation_matrix(ix):
         pose = pickle.load(f)
         world_to_cam1 = np.vstack((np.hstack((pose["R"], pose["t"])), [0, 0, 0, 1]))
 
-    transform = cam0_to_world @ world_to_cam1
+    transform = world_to_cam1 @ cam0_to_world
     transform[:3, 3] = transform[:3, 3] / 1000.0
     return transform
 
@@ -101,31 +101,29 @@ def project_kinect_to_omni(frames, k_idx, fk):
     masked_depth, binary = get_masked_depth_and_binary(depth, mask)
 
     # Get camera coordinates in depth image space
-    depthX, depthY, depthZ = get_mesh_in_depth_coordinates(
-        config, mesh_pickle_file, k_idx, need_image_coordinates_flag=True
-    )
-    depth_camera_coordinates = np.stack(
-        [depthX, depthY, depthZ, np.ones_like(depthX)], axis=1
-    )
+    depthX, depthY, depthZ = get_mesh_in_depth_coordinates(config, mesh_pickle_file, k_idx, need_image_coordinates_flag=True)
+    plot_mesh_3D(depthX, depthY, depthZ, dst_filepath="/home/sid/mesh-depth-cam2.html")
+    depth_camera_coordinates = np.stack([depthX, depthY, depthZ, np.ones_like(depthX)], axis=1)
 
     # Project the mesh onto the omnidirectional camera frame using extrinsics.
     transform = make_transformation_matrix(k_idx)
     omni_camera_coordinates = transform @ depth_camera_coordinates.T
+    
+    omni_camera_coordinates = omni_camera_coordinates[:3, :].T
+    omnicamX, omniCamY, omniCamZ = omni_camera_coordinates.T
+
+
+    plot_mesh_3D(omnicamX, omniCamY, omniCamZ, dst_filepath="/home/sid/mesh-omni-cam.html")
+
+    omni_camera_coordinates = np.expand_dims(omni_camera_coordinates, axis=0)
 
     # Project the mesh onto the omnidirectional image frame.
     omni_params_file = config["omni_params"]
     with open(omni_params_file, "rb") as f:
         omni_params = pickle.load(f)
-    
+
     xi = omni_params["xi"]
     xi = xi.item() if isinstance(xi, np.ndarray) else xi
-    omni_camera_coordinates = omni_camera_coordinates[:3, :].T
-    omni_camera_coordinates = np.expand_dims(omni_camera_coordinates, axis=0)
-
-    omni_camera_coordinates = np.
-    ic(omni_camera_coordinates.shape)
-    # plot_mesh_3D(depthX, depthY, pelvicZ, dst_filepath="/home/sid/mesh.html")
-    # print(blah)
 
     omni_image_coordinates, _ = cv2.omnidir.projectPoints(
         omni_camera_coordinates.astype(np.float64),
@@ -137,8 +135,7 @@ def project_kinect_to_omni(frames, k_idx, fk):
     )
 
     omni_image_coordinates = np.squeeze(omni_image_coordinates, axis=0).T
-    ic(omni_image_coordinates)
-    ic(omni_image_coordinates.shape) 
+     
 
     # omni_image_coordinates = np.swapaxes(omni_image_coordinates, 0, 1)
     omniX, omniY = omni_image_coordinates[0], omni_image_coordinates[1]

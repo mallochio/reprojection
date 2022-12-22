@@ -9,6 +9,7 @@
 Optimize the camera pose given an image of a chessboard, the camera intrinsics and the chessboard grid size.
 """
 
+import os
 import argparse
 import pickle
 from typing import Optional, Tuple
@@ -172,80 +173,95 @@ def get_cam_pose(
         raise Exception("Could not find the chessboard!")
     return rvecs, tvecs
 
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "img_path",
+        type=str,
+        help="Path to the image of the chessboard",
+    )
+    parser.add_argument(
+        "cam_params",
+        type=str,
+        default=None,
+        help="Path to the camera parameters pickle file",
+    )
+    parser.add_argument(
+        "--grid_size",
+        type=int,
+        nargs=2,
+        default=(9, 6),
+        help="Number of squares in the chessboard grid",
+    )
+    parser.add_argument(
+        "--square_width_mm",
+        type=float,
+        default=96,
+        help="Width of a square in the chessboard grid",
+    )
+    parser.add_argument(
+        "--fisheye",
+        action="store_true",
+    )
+    parser.add_argument(
+        "-d",
+        "--debug",
+        action="store_true",
+        dest="debug",
+        help="Draw 3D axes/cube reprojected on the image",
+    )
+    parser.add_argument(
+        "--dst",
+        type=str,
+        default=".",
+        help="Path to the directory where the output files will be saved",
+    )
+    parser.add_argument(
+        "--prefix",
+        type=str,
+        default="",
+        help="Prefix to add to the output filenames",
+    )
+    args = parser.parse_args()
+    # Load the camera parameters from the pickle file
+    with open(args.cam_params, "rb") as f:
+        cam_params = pickle.load(f)
 
-parser = argparse.ArgumentParser()
-parser.add_argument(
-    "img_path",
-    type=str,
-    help="Path to the image of the chessboard",
-)
-parser.add_argument(
-    "cam_params",
-    type=str,
-    default=None,
-    help="Path to the camera parameters pickle file",
-)
-parser.add_argument(
-    "--grid_size",
-    type=int,
-    nargs=2,
-    default=(9, 6),
-    help="Number of squares in the chessboard grid",
-)
-parser.add_argument(
-    "--square_width_mm",
-    type=float,
-    default=96,
-    help="Width of a square in the chessboard grid",
-)
-parser.add_argument(
-    "--fisheye",
-    action="store_true",
-)
-parser.add_argument(
-    "-d",
-    "--debug",
-    action="store_true",
-    dest="debug",
-    help="Draw 3D axes/cube reprojected on the image",
-)
-args = parser.parse_args()
-# Load the camera parameters from the pickle file
-with open(args.cam_params, "rb") as f:
-    cam_params = pickle.load(f)
+    print("[*] Running camera pose optimization (PnP)...")
+    rvecs, tvecs = get_cam_pose(
+        args.img_path,
+        cam_params["img_shape"],
+        args.grid_size,
+        args.square_width_mm,
+        cam_params["intrinsics"],
+        cam_params["distortion"],
+        cam_params["xi"] if args.fisheye else None,
+        args.fisheye,
+        args.debug,
+    )
+    # Compose the rotation matrix from the rotation vector
+    Rt, _ = cv.Rodrigues(rvecs)
+    # Get the global camera pose. The world-to-camera transformation matrix is the inverse of the
+    # camera-to-world matrix. The obtained rvecs,tvecs are the world-to-camera transformation, that is
+    # it transforms a point from the world origin to the camera frame.
+    print("================== World-to-camera transformation ==================")
+    print(f"-> R={Rt}")
+    print(f"-> t={tvecs}")
+    # Save the rotation matrix and translation vector into a pickle file named 'world_to_cam.pkl'
+    world_to_cam_path = os.path.join(args.dst, f"{args.prefix}_world_to_cam.pkl")
+    with open(world_to_cam_path, "wb") as f:
+        pickle.dump({"R": Rt, "t": tvecs}, f)
+        print("[*] Transformation saved to 'world_to_cam.pkl'")
+    print("====================================================================")
 
-print("[*] Running camera pose optimization (PnP)...")
-rvecs, tvecs = get_cam_pose(
-    args.img_path,
-    cam_params["img_shape"],
-    args.grid_size,
-    args.square_width_mm,
-    cam_params["intrinsics"],
-    cam_params["distortion"],
-    cam_params["xi"] if args.fisheye else None,
-    args.fisheye,
-    args.debug,
-)
-# Compose the rotation matrix from the rotation vector
-Rt, _ = cv.Rodrigues(rvecs)
-# Get the global camera pose. The world-to-camera transformation matrix is the inverse of the
-# camera-to-world matrix. The obtained rvecs,tvecs are the world-to-camera transformation, that is
-# it transforms a point from the world origin to the camera frame.
-print("================== World-to-camera transformation ==================")
-print(f"-> R={Rt}")
-print(f"-> t={tvecs}")
-with open("world_to_cam.pkl", "wb") as f:
-    pickle.dump({"R": Rt, "t": tvecs}, f)
-    print("[*] Transformation saved to 'world_to_cam.pkl'")
-print("====================================================================")
-
-print("================== Camera-to-world transformation ==================")
-R = Rt.T
-t = -R @ tvecs
-print(f"-> R={R}")
-print(f"-> t={t}")
-# Save the rotation matrix and translation vector into a pickle file named 'cam_pose.pkl'
-with open("cam_to_world.pkl", "wb") as f:
-    pickle.dump({"R": R, "t": t}, f)
-    print("[*] Transformation saved to 'cam_to_world.pkl'")
-print("====================================================================")
+    print("================== Camera-to-world transformation ==================")
+    R = Rt.T
+    t = -R @ tvecs
+    print(f"-> R={R}")
+    print(f"-> t={t}")
+    # Save the rotation matrix and translation vector into a pickle file named 'cam_to_world.pkl'
+    cam_to_world_path = os.path.join(args.dst, f"{args.prefix}_cam_to_world.pkl")
+    with open(cam_to_world_path, "wb") as f:
+        pickle.dump({"R": R, "t": t}, f)
+        print("[*] Transformation saved to 'cam_to_world.pkl'")
+    print("====================================================================")
