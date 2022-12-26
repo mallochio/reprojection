@@ -50,6 +50,7 @@ def main(path, threshold, output_path):
     with open(output_path, "w") as f:
         for item in tqdm(person_in_image):
             image_name = item.split("_")[0] + ".jpg"
+            image_name = f'/home/sid/Projects/OmniScience/dataset/2022-10-06/bedroom/sid/round1/capture1/rgb/{image_name}'
             f.write(f"{image_name}\n")
 
 
