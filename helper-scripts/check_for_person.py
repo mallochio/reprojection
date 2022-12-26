@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import argparse
 import os
 import cv2
@@ -21,16 +22,16 @@ def check_for_person(obj, threshold, image_width=1280, image_height=720):
     # Check if a person is in the image by using frankmocap meshes by checking
     # if the image coordinates of the person are within the image boundaries by above a threshold
     person_image_coordinates = obj["pred_output_list"][0]["pred_vertices_img"]
+    
+    # Convert list of coordinates to a NumPy array for easier indexing and boolean indexing
+    coordinates = np.array(person_image_coordinates)
+    
     # Check if the mesh vertices are within the image boundaries
-    checklist = []
-    for vertex in person_image_coordinates:
-        checklist.append(
-            True
-            if 0 <= vertex[0] < image_width and 0 <= vertex[1] < image_height
-            else False
-        )
+    x_in_bounds = np.logical_and(coordinates[:, 0] >= 0, coordinates[:, 0] < image_width)
+    y_in_bounds = np.logical_and(coordinates[:, 1] >= 0, coordinates[:, 1] < image_height)
+    
     # Check if the percent of vertices within the image boundaries is above a threshold
-    return True if sum(checklist) / len(checklist) > threshold else False
+    return np.mean(np.logical_and(x_in_bounds, y_in_bounds)) > threshold
 
 
 def main(path, threshold, output_path):
