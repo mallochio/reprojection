@@ -3,6 +3,7 @@ import numpy as np
 import argparse
 import os
 import cv2
+from pathlib import Path
 from tqdm import tqdm
 
 
@@ -11,7 +12,7 @@ def get_mesh_dict(checkpath):
     pickle_dict = {}
     for i in os.listdir(checkpath):
         if i.endswith(".pkl"):
-            df = pd.read_pickle(os.path.join(checkpath, i))
+            df = pd.read_pickle(str(Path(checkpath, i)))
             # An if condition to check if the pickle has a person in it (this was seen during tests)
             if df["pred_output_list"][0] is not None:
                 pickle_dict[i] = df
@@ -34,9 +35,9 @@ def check_for_person(obj, threshold, image_width=1280, image_height=720):
     return np.mean(np.logical_and(x_in_bounds, y_in_bounds)) > threshold
 
 
-def main(path, threshold, output_path):
+def main(picklepath, threshold, output_path):
     # Check if the person is within the image boundaries by above a threshold
-    mesh_dict = get_mesh_dict(path)
+    mesh_dict = get_mesh_dict(picklepath)
     person_in_image = []
     print(f"[*] Checking for person in {len(mesh_dict)} images")
     for key, value in tqdm(mesh_dict.items()):
@@ -45,31 +46,35 @@ def main(path, threshold, output_path):
     # (Over)Write the list of images with a person in it to a file
     print("=================================================================")
     if not output_path.endswith(".txt"):
-        output_path = os.path.join(output_path, "person_detected.txt")
+        output_path = str(Path(output_path, "person_detected.txt"))
+
     print(f"[*] Writing list to {output_path}")
     with open(output_path, "w") as f:
         for item in tqdm(person_in_image):
+            # Point to the corresponding image that the pickle file is generated from
             image_name = item.split("_")[0] + ".jpg"
-            image_name = f'/home/sid/Projects/OmniScience/dataset/2022-10-06/bedroom/sid/round1/capture1/rgb/{image_name}'
+            image_name  = f"{Path(picklepath).parents[1]}/rgb/{image_name}"
             f.write(f"{image_name}\n")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--checkpath",
-        help="Path to the frankmocap output directory",
+        "--pickle-path",
+        help="Path to the pickle files from running frankmocap",
+        dest="picklepath",
         type=str,
         required=True,
         # default="/home/sid/Projects/OmniScience/dataset/2022-10-06/bedroom/sid/round1/capture1/mocap_output/mocap",
     )
     parser.add_argument("--threshold", type=float, default=0.95)
     parser.add_argument(
-        "--output_path",
+        "--output-path",
         help="Path to write the list of images with a person in it",
+        dest="outputpath",
         type=str,
         required=True,
         # default="/home/sid/Projects/OmniScience/dataset/2022-10-06/bedroom/sid/round1/capture1/mocap_output",
     )
     args = parser.parse_args()
-    main(args.checkpath, args.threshold, args.output_path)
+    main(args.picklepath, args.threshold, args.outputpath)
