@@ -3,6 +3,7 @@ import cv2
 import threading
 import queue
 import functools
+import argparse
 
 
 @functools.lru_cache(maxsize=None)
@@ -23,9 +24,9 @@ def image_loader_thread(image_paths, image_queue):
         image_queue.put(image)
 
 
-if __name__ == "__main__":
+def main(image_list):
     # Read in list of image file paths from text file
-    with open("/home/sid/person_detected.txt", "r") as f:
+    with open(image_list, "r") as f:
         image_paths = f.read().splitlines()
 
     # Create a PySimpleGUI window
@@ -35,7 +36,7 @@ if __name__ == "__main__":
     ]
     window = sg.Window(
         "Image Viewer",
-        layout, 
+        layout,
         # key="window"
     )
 
@@ -44,11 +45,7 @@ if __name__ == "__main__":
 
     # Create a queue to store the images that have been loaded
     image_queue = queue.Queue()
-
-    thread = threading.Thread(
-        target=image_loader_thread, 
-        args=(image_paths, image_queue)
-    )
+    thread = threading.Thread(target=image_loader_thread, args=(image_paths, image_queue))
     thread.start()
 
     while True:
@@ -76,3 +73,15 @@ if __name__ == "__main__":
             update_image(window, image)
 
     window.close()
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--image_list",
+        type=str,
+        required=True,
+        help=f"Path to the text file containing the list of images to scroll through",
+    )
+    args = parser.parse_args()
+    main(args.image_list)

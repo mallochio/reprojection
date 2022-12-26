@@ -60,14 +60,16 @@ if __name__ == "__main__":
         "--checkpath",
         help="Path to the frankmocap output directory",
         type=str,
-        default="/home/sid/Projects/OmniScience/dataset/2022-10-06/bedroom/sid/round1/capture1/mocap_output/mocap",
+        required=True,
+        # default="/home/sid/Projects/OmniScience/dataset/2022-10-06/bedroom/sid/round1/capture1/mocap_output/mocap",
     )
     parser.add_argument("--threshold", type=float, default=0.95)
     parser.add_argument(
         "--output_path",
         help="Path to write the list of images with a person in it",
         type=str,
-        default="/home/sid/Projects/OmniScience/dataset/2022-10-06/bedroom/sid/round1/capture1/mocap_output",
+        required=True,
+        # default="/home/sid/Projects/OmniScience/dataset/2022-10-06/bedroom/sid/round1/capture1/mocap_output",
     )
     args = parser.parse_args()
     main(args.checkpath, args.threshold, args.output_path)
