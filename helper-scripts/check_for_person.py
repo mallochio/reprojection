@@ -2,12 +2,12 @@ import pandas as pd
 import numpy as np
 import argparse
 import os
-import cv2
 from pathlib import Path
 from tqdm import tqdm
+from typing import Dict
 
 
-def get_mesh_dict(checkpath):
+def get_mesh_dict(checkpath: str) -> Dict:
     # Get the pickle files from the mocap output directory
     pickle_dict = {}
     for i in os.listdir(checkpath):
@@ -19,23 +19,32 @@ def get_mesh_dict(checkpath):
     return pickle_dict
 
 
-def check_for_person(obj, threshold, image_width=1280, image_height=720):
+def check_for_person(
+    obj: Dict, 
+    threshold: float, 
+    image_width: int = 1280, 
+    image_height: int = 720
+) -> bool:
     # Check if a person is in the image by using frankmocap meshes by checking
     # if the image coordinates of the person are within the image boundaries by above a threshold
     person_image_coordinates = obj["pred_output_list"][0]["pred_vertices_img"]
-    
+
     # Convert list of coordinates to a NumPy array for easier indexing and boolean indexing
     coordinates = np.array(person_image_coordinates)
-    
+
     # Check if the mesh vertices are within the image boundaries
-    x_in_bounds = np.logical_and(coordinates[:, 0] >= 0, coordinates[:, 0] < image_width)
-    y_in_bounds = np.logical_and(coordinates[:, 1] >= 0, coordinates[:, 1] < image_height)
-    
+    x_in_bounds = np.logical_and(
+        coordinates[:, 0] >= 0, coordinates[:, 0] < image_width
+    )
+    y_in_bounds = np.logical_and(
+        coordinates[:, 1] >= 0, coordinates[:, 1] < image_height
+    )
+
     # Check if the percent of vertices within the image boundaries is above a threshold
     return np.mean(np.logical_and(x_in_bounds, y_in_bounds)) > threshold
 
 
-def main(picklepath, threshold, output_path):
+def main(picklepath: str, threshold: float, output_path: str):
     # Check if the person is within the image boundaries by above a threshold
     mesh_dict = get_mesh_dict(picklepath)
     person_in_image = []
@@ -53,7 +62,7 @@ def main(picklepath, threshold, output_path):
         for item in tqdm(person_in_image):
             # Point to the corresponding image that the pickle file is generated from
             image_name = item.split("_")[0] + ".jpg"
-            image_name  = f"{Path(picklepath).parents[1]}/rgb/{image_name}"
+            image_name = f"{Path(picklepath).parents[1]}/rgb/{image_name}"
             f.write(f"{image_name}\n")
 
 
