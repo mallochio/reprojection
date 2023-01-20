@@ -9,10 +9,11 @@ sys.path.append(abspath("."))
 sys.path.append(abspath(".."))
 
 
+import cv2
+import pickle
 from config import load_config as conf
 from utils import distance_filter as df
 from tqdm import tqdm
-import cv2
 import numpy as np
 from utils.framekeeper import FrameKeeper
 from utils import omni
@@ -24,6 +25,7 @@ from utils.reproject_mesh import get_mesh_in_depth_coordinates
 ############
 ## For debugging
 from icecream import ic, install
+
 install()
 ###########
 
@@ -39,12 +41,12 @@ debug = False  # Show additional information
 
 
 def get_depth_visible(frames, k_idx, fk):
-    depth = np.float32(cv2.flip(frames["capture%d" % k_idx], 1))
+    depth = np.float64(cv2.flip(frames["capture%d" % k_idx], 1))
 
     depth = cv2.undistort(
-        depth.astype(np.float64), 
-        fk.kinect_params[k_idx]["K"], 
-        fk.kinect_params[k_idx]["D"]
+        depth,
+        fk.kinect_params[k_idx]["K"],
+        fk.kinect_params[k_idx]["D"],
     )
 
     cv2.imshow("depth_ud", depth)
@@ -63,37 +65,85 @@ def get_masked_depth_and_binary(depth, mask=None):
     binary = np.uint8(np.uint8(masked_depth / 4500.0 * 255.0) > 0) * 255
     return masked_depth, binary
 
+
 def get_mask(frames, k_idx, fk, depth):
     # Mask is the intersection of a motion mask and a densepose mask
     background = fk.empty_depth[k_idx].copy()
     motion_mask = morphology.generate_mask(depth, background, cc=True)
     mask = motion_mask
-    mask = cv2.flip(frames[f'_capture{k_idx}_rgb_densepose'][:,:,0], 1)
+    mask = cv2.flip(frames[f"_capture{k_idx}_rgb_densepose"][:, :, 0], 1)
     mask = np.logical_and(mask, motion_mask)
     return mask
 
 
+def make_transformation_matrix(ix):
+    cam0_to_world_pth = config[f"k{ix}_depth_to_world"]
+    world_to_cam1_pth = config[f"k{ix}_world_to_omni"]
+
+    with open(cam0_to_world_pth, "rb") as f:
+        pose = pickle.load(f)
+        cam0_to_world = np.vstack((np.hstack((pose["R"], pose["t"])), [0, 0, 0, 1]))
+    with open(world_to_cam1_pth, "rb") as f:
+        pose = pickle.load(f)
+        world_to_cam1 = np.vstack((np.hstack((pose["R"], pose["t"])), [0, 0, 0, 1]))
+
+    transform = cam0_to_world @ world_to_cam1
+    transform[:3, 3] = transform[:3, 3] / 1000.0
+    return transform
+
+
 def project_kinect_to_omni(frames, k_idx, fk):
-    mesh_pickle_file = frames[f'_capture{k_idx}_frankmocap']
+    mesh_pickle_file = frames[f"_capture{k_idx}_frankmocap"]
     depth, depth_visible = get_depth_visible(frames, k_idx, fk)
 
     # mask = get_mask(frames, k_idx, fk, depth)
     mask = None
     masked_depth, binary = get_masked_depth_and_binary(depth, mask)
-    
-    # Get camera coordinates in depth image space
-    depthX, depthY, depthZ = get_mesh_in_depth_coordinates(config, mesh_pickle_file, k_idx)
-    ones = np.ones_like(depthX)
-    depth_camera_coordinates = np.stack([depthX, depthY, depthZ, ones], axis=1)
 
-    X, Y = omni.world_to_omni_scaramuzza_fast(
-        fk.Ts[k_idx], 
-        depth_camera_coordinates, 
-        fk.omni_params[k_idx], 
-        uw, uh
+    # Get camera coordinates in depth image space
+    depthX, depthY, depthZ = get_mesh_in_depth_coordinates(
+        config, mesh_pickle_file, k_idx, need_image_coordinates_flag=True
+    )
+    depth_camera_coordinates = np.stack(
+        [depthX, depthY, depthZ, np.ones_like(depthX)], axis=1
     )
 
-    X, Y = np.real(X), np.real(Y)
+    # Project the mesh onto the omnidirectional camera frame using extrinsics.
+    transform = make_transformation_matrix(k_idx)
+    omni_camera_coordinates = transform @ depth_camera_coordinates.T
+
+    # Project the mesh onto the omnidirectional image frame.
+    omni_params_file = config["omni_params"]
+    with open(omni_params_file, "rb") as f:
+        omni_params = pickle.load(f)
+    
+    xi = omni_params["xi"]
+    xi = xi.item() if isinstance(xi, np.ndarray) else xi
+    omni_camera_coordinates = omni_camera_coordinates[:3, :].T
+    omni_camera_coordinates = np.expand_dims(omni_camera_coordinates, axis=0)
+
+    omni_camera_coordinates = np.
+    ic(omni_camera_coordinates.shape)
+    # plot_mesh_3D(depthX, depthY, pelvicZ, dst_filepath="/home/sid/mesh.html")
+    # print(blah)
+
+    omni_image_coordinates, _ = cv2.omnidir.projectPoints(
+        omni_camera_coordinates.astype(np.float64),
+        np.zeros(3),
+        np.zeros(3),
+        omni_params["intrinsics"],  
+        xi,
+        omni_params["distortion"],
+    )
+
+    omni_image_coordinates = np.squeeze(omni_image_coordinates, axis=0).T
+    ic(omni_image_coordinates)
+    ic(omni_image_coordinates.shape) 
+
+    # omni_image_coordinates = np.swapaxes(omni_image_coordinates, 0, 1)
+    omniX, omniY = omni_image_coordinates[0], omni_image_coordinates[1]
+
+    X, Y = np.real(omniX), np.real(omniY)
     return np.int32(np.round(X)), np.int32(np.round(Y)), depth_visible, binary
 
 
@@ -129,21 +179,33 @@ def main():
         # Project each kinect point cloud onto the omnidirectional camera view.
         for k_idx in range(fk.num_kinects):
             Xu, Yu, depth_vis, binary_mask = project_kinect_to_omni(frames, k_idx, fk)
-            omni_image[Yu, Xu] = omni_image[Yu, Xu] / 1.5 + np.array(assigned_colors[k_idx])
+            omni_image[Yu, Xu] = omni_image[Yu, Xu] / 1.5 + np.array(
+                assigned_colors[k_idx]
+            )
             omni_mask[Yu, Xu] = 255
 
-            out_frame[0 : vid_size[1] // 2, k_idx * dsize[0] : k_idx * dsize[0] + dsize[0], :] = cv2.cvtColor(cv2.resize(depth_vis, dsize), cv2.COLOR_GRAY2BGR)
-            out_frame[vid_size[1] // 2 :, k_idx * dsize[0] : k_idx * dsize[0] + dsize[0], :] = cv2.cvtColor(cv2.resize(binary_mask, dsize), cv2.COLOR_GRAY2BGR)
+            out_frame[
+                0 : vid_size[1] // 2, k_idx * dsize[0] : k_idx * dsize[0] + dsize[0], :
+            ] = cv2.cvtColor(cv2.resize(depth_vis, dsize), cv2.COLOR_GRAY2BGR)
+            out_frame[
+                vid_size[1] // 2 :, k_idx * dsize[0] : k_idx * dsize[0] + dsize[0], :
+            ] = cv2.cvtColor(cv2.resize(binary_mask, dsize), cv2.COLOR_GRAY2BGR)
 
         # cv2.imshow('fisheye view', cv2.resize(omni_image, dsize=dsize))
-        out_frame[0 : vid_size[1] // 2, 2 * dsize[0] :, :] = cv2.resize(omni_image, dsize)
+        out_frame[0 : vid_size[1] // 2, 2 * dsize[0] :, :] = cv2.resize(
+            omni_image, dsize
+        )
         side_frame[:, 0:uw] = cv2.resize(omni_image, (uw, uh))
 
         omni_mask = morphology.paco(omni_mask)
         # cv2.imshow('fisheye mask', cv2.resize(omni_mask, dsize=dsize))
 
-        out_frame[vid_size[1] // 2 :, 2 * dsize[0] :, :] = cv2.cvtColor(cv2.resize(omni_mask, dsize), cv2.COLOR_GRAY2BGR)
-        side_frame[:, uw:] = cv2.cvtColor(cv2.resize(omni_mask, (uw, uh)), cv2.COLOR_GRAY2BGR)
+        out_frame[vid_size[1] // 2 :, 2 * dsize[0] :, :] = cv2.cvtColor(
+            cv2.resize(omni_mask, dsize), cv2.COLOR_GRAY2BGR
+        )
+        side_frame[:, uw:] = cv2.cvtColor(
+            cv2.resize(omni_mask, (uw, uh)), cv2.COLOR_GRAY2BGR
+        )
 
         cv2.imshow("out_frame", out_frame)
         cv2.imshow("side_frame", side_frame)
