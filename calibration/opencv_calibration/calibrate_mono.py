@@ -6,7 +6,17 @@
 # Distributed under terms of the MIT license.
 
 """
-We are using a 9x6 grid of 92mm.
+We are using a 9x6 grid of 96mm.
+
+A note on omnidirectional camera calibration:
+CMei's model is apprently better than Scaramuzza's, which is not implemented in OpenCV.
+In their paper (https://www.robots.ox.ac.uk/~cmei/articles/single_viewpoint_calib_mei_07.pdf), they
+state "In [Scaramuzza], the authors propose a method relying on a polynomial approximation of the
+projection function. With this model, initial values of the projection function are difficult to
+obtain so the user has to select each point of the calibration grid independently for the
+calibration. We will show that by using an exact model to which we add small errors, only four
+points need to be selected for each calibration grid. The parameters that appear in the proposed
+model can also be easily interpreted in terms of the optical quality of the sensor."
 """
 
 import argparse
