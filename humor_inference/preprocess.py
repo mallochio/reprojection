@@ -20,7 +20,7 @@ from scipy.stats import mode as scipy_mode
 from scipy.special import kl_div as kl_div
 from tqdm import tqdm
 
-def compute_body_coverage(seg_mask, iuv_map):
+def compute_body_coverage(seg_mask, iuv_map, debug=False):
     part_index = {
         "torso": [1, 2],
         "upper_right_arm": [16, 18],
@@ -56,29 +56,22 @@ def compute_body_coverage(seg_mask, iuv_map):
 
         # Compute the weighted surface area of the body part
         part_surface_areas[part] = max(50, intersection.sum())/body_pixels.sum()
-        print(f"{part}: {part_surface_areas[part]}px")
+        if debug:
+            print(f"{part}: {part_surface_areas[part]}px")
 
-    # Compute the total number of body parts that contribute to the total surface area
-    # n_contributing_parts = len([area for area in part_surface_areas.values() if area > 0])
+    ideal_distribution = {"torso": 0.4, "head": 0.2, "left_leg":0.1, "right_leg": 0.1,
+                          "upper_left_arm": 0.05, "upper_right_arm": 0.05, "lower_left_arm": 0.05,
+                          "lower_right_arm": 0.05}
+    computed_distribution = [part_surface_areas[part] for part in ideal_distribution.keys()]
+    div = sum(kl_div(list(ideal_distribution.values()), computed_distribution))
+    if debug:
+        print(ideal_distribution, computed_distribution)
+        print(f"KL divergence: {div}")
 
-    # If there are no contributing body parts, return 0 as the diversity metric
-    # if n_contributing_parts == 0:
-        # return 0
-
-    div = sum(kl_div([1/len(part_index.keys())]*len(part_index.keys()), list(part_surface_areas.values())))
-    print(f"KL divergence: {div}")
-
-    # Compute the mean squared surface area of the body parts that contribute to the total surface area
-    # mean_squared_surface_area = np.mean([area ** 2 for area in part_surface_areas.values() if area > 0])
-
-    # Compute the diversity metric as the mean squared surface area, divided by the total surface area,
-    # multiplied by the number of contributing body parts
-    # diversity_metric = (mean_squared_surface_area) / total_surface_area * n_contributing_parts
     # Move to the [0,1] range via a sigmoid function
     diversity_metric = 1 / (1 + np.exp(div))
-    # print(f"mean squared: {mean_squared_surface_area}px")
-    # print(f"total: {total_surface_area}px")
-    print(f"diversity: {diversity_metric}")
+    if debug:
+        print(f"diversity: {diversity_metric}")
     return diversity_metric
 
 def save_subsequence(
@@ -111,6 +104,7 @@ def main(
     iuvs_path: str,
     output_path: str,
     threshold: float = 0.5,
+    debug: bool = False
 ):
     """Preprocess a sequence.
 
@@ -171,32 +165,19 @@ def main(
         os.path.join(masks_path, mask_files[0]), cv2.IMREAD_GRAYSCALE
     )
     first_iuv = cv2.imread(os.path.join(iuvs_path, iuv_files[0]))
-    # contains_person = (
-    # np.sum(first_mask > 0) / (first_mask.shape[0] * first_mask.shape[1]) > threshold
-    # )
-    # body_part_coverage = compute_body_coverage(first_mask, first_iuv)
     body_part_coverage = compute_body_coverage(first_mask, first_iuv)
     contains_person: bool = body_part_coverage > threshold
-    # mean, median, mode, std = compute_body_coverage(first_mask, first_iuv)
-    # contains_person: bool = mean > threshold
-    median_filter_size = 10
+    median_filter_size = 5
     median_filter = [body_part_coverage] * median_filter_size
     for rgb_file, mask_file, iuv in tqdm(
         zip(rgb_files, mask_files, iuv_files), total=len(rgb_files)
     ):
         mask = cv2.imread(os.path.join(masks_path, mask_file), cv2.IMREAD_GRAYSCALE)
         iuv = cv2.imread(os.path.join(iuvs_path, iuv))
-        # person_area = np.sum(mask > 0) / (mask.shape[0] * mask.shape[1])
-        # body_part_coverage = compute_body_coverage(mask, iuv)
-        body_part_coverage = compute_body_coverage(mask, iuv)
+        body_part_coverage = compute_body_coverage(mask, iuv, debug)
         median_filter.pop(0)
         median_filter.append(body_part_coverage)
         median = np.median(median_filter)
-        print(body_part_coverage, median)
-        # print(body_part_coverage, median)
-        # mean, median, mode, std = compute_body_coverage(mask, iuv)
-        # print(median, mode, std)
-        # print(mean, median, mode, std)
         # If the person area is above the threshold, the subject is visible
         if median > threshold:
             # if body_part_coverage > threshold:
@@ -230,16 +211,18 @@ def main(
         contains_person = len(current_subsequence) >= MIN_FRAMES_FOR_PERSON
     save_subsequence(current_subsequence, subsequence_idx, contains_person, output_path)
 
-parser = argparse.ArgumentParser(description="Preprocess a sequence.")
-parser.add_argument("sequence", type=str, help="The RGB sequence to preprocess.")
-parser.add_argument("masks", type=str, help="The segmentation masks of the sequence.")
-parser.add_argument("iuvs", type=str, help="The IUV maps of the sequence.")
-parser.add_argument("--output", type=str, help="The output directory.", required=True)
-parser.add_argument(
-    "--threshold",
-    type=float,
-    help="The minimum person area to use for the segmentation masks.",
-    default=0.02,
-)
-args = parser.parse_args()
-main(args.sequence, args.masks, args.iuvs, args.output, args.threshold)
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Preprocess a sequence.")
+    parser.add_argument("sequence", type=str, help="The RGB sequence to preprocess.")
+    parser.add_argument("masks", type=str, help="The segmentation masks of the sequence.")
+    parser.add_argument("iuvs", type=str, help="The IUV maps of the sequence.")
+    parser.add_argument("--output", type=str, help="The output directory.", required=True)
+    parser.add_argument(
+        "--threshold",
+        type=float,
+        help="Minimum threshold for person visibility.",
+        default=0.24,
+    )
+    parser.add_argument("--debug", action="store_true", help="Debug mode.")
+    args = parser.parse_args()
+    main(args.sequence, args.masks, args.iuvs, args.output, args.threshold, args.debug)
