@@ -58,7 +58,7 @@ def main(image_list):
         event, values = window.read(timeout=100)
         if event in (None, "Exit"):
             break
-        elif event in ["Next", "window:down:40"]:
+        elif event in ["Next", "Down:40"]:
             index = (index + 1) % len(image_paths)
             try:
                 # Try to get the next image from the queue
@@ -67,7 +67,7 @@ def main(image_list):
                 # If the queue is empty, use a placeholder image
                 image = cv2.imread("placeholder.png")
             update_image(window, image)
-        elif event in ["Previous", "window:down:38"]:
+        elif event in ["Previous", "Down:38"]:
             index = (index - 1) % len(image_paths)
             try:
                 # Try to get the previous image from the queue
@@ -83,7 +83,7 @@ def main(image_list):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--image_list",
+        "--image_list", "-i",
         type=str,
         required=True,
         help="Path to the text file containing the list of images to scroll through",
