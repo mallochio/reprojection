@@ -81,21 +81,24 @@ def get_synced_filenames(base_dir, output_dir):
     print("[*] Syncing files")
     for omni_timestamp in tqdm(omni_timestamps):
         delta = omni_timestamp - int(synced_filenames[-1][-1].split(".")[0])
-
+        kinect_timestamps_prev = [
+            int(i.split(".")[0]) for i in synced_filenames[-1][:-1]
+        ]
         # Now we find the corresponding images in the other directories according to the delta
         for i in range(num_kinects):
-            kinect_timestamp_approx = int(synced_filenames[-1][0].split(".")[0]) + delta
+            kinect_timestamp_new_approx = kinect_timestamps_prev[i] + delta
 
             # Find the nearest timestamp in the kinect directory
-            kinect_timestamp = min(
-                kinect_timestamps[i], key=lambda x: abs(x - kinect_timestamp_approx)
+            kinect_timestamp_new = min(
+                kinect_timestamps[i], key=lambda x: abs(x - kinect_timestamp_new_approx)
             )
-            kinect_filename = f"{kinect_timestamp}.jpg"
+            kinect_filename = f"{kinect_timestamp_new}.jpg"
             if i == 0:
                 synced_filenames.append([kinect_filename])
             else:
                 synced_filenames[-1].append(kinect_filename)
-                synced_filenames[-1].append(f"{omni_timestamp}.jpg")
+
+        synced_filenames[-1].append(f"{omni_timestamp}.jpg")
 
     print("[*] Writing to file")
     write_synced_filenames(synced_filenames, args.output_dir, num_kinects)
