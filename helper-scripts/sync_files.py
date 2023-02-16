@@ -26,7 +26,6 @@ def write_synced_filenames(synced_filenames, output_dir, num_kinects):
 
 
 def get_synced_filenames(base_dir, output_dir):
-    # shots.txt contains the timestamps of the synchronized images in each directory, this should be starting point for the sync
     with open(os.path.join(base_dir, "shots.txt"), "r") as file:
         # Skip the first line, read the second and format it into a list of lists
         for line in file:
@@ -72,32 +71,32 @@ def get_synced_filenames(base_dir, output_dir):
     omni_reference_timestamp = int(shots[-1].split(".")[0])
     omni_timestamps = omni_timestamps[omni_timestamps > omni_reference_timestamp]
 
+    kinect_shots = []
     for i in range(num_kinects):
         kinect_reference_timestamp = int(shots[i].split(".")[0])
         mask = kinect_timestamps[i] > kinect_reference_timestamp
         kinect_timestamps[i] = kinect_timestamps[i][mask]
+        kinect_shots.append(kinect_reference_timestamp)
 
-    # Run through the omnidirectional images and find the nearest image in each directory, and keep a running delta
+    deltas = np.array(
+        [kinect_shots[i] - omni_reference_timestamp for i in range(num_kinects)],
+        dtype=object,
+    )
+
+    # Now run through the omni images and find the nearest image in each directory after adding the delta
     print("[*] Syncing files")
     for omni_timestamp in tqdm(omni_timestamps):
-        delta = omni_timestamp - int(synced_filenames[-1][-1].split(".")[0])
-        kinect_timestamps_prev = [
-            int(i.split(".")[0]) for i in synced_filenames[-1][:-1]
-        ]
-        # Now we find the corresponding images in the other directories according to the delta
         for i in range(num_kinects):
-            kinect_timestamp_new_approx = kinect_timestamps_prev[i] + delta
-
-            # Find the nearest timestamp in the kinect directory
+            kinect_timestamp_approx = omni_timestamp + deltas[i]
+            # get nearest timestamp in the kinect directory
             kinect_timestamp_new = min(
-                kinect_timestamps[i], key=lambda x: abs(x - kinect_timestamp_new_approx)
+                kinect_timestamps[i], key=lambda x: abs(x - kinect_timestamp_approx)
             )
             kinect_filename = f"{kinect_timestamp_new}.jpg"
             if i == 0:
                 synced_filenames.append([kinect_filename])
             else:
                 synced_filenames[-1].append(kinect_filename)
-
         synced_filenames[-1].append(f"{omni_timestamp}.jpg")
 
     print("[*] Writing to file")
