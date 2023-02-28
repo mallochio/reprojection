@@ -287,7 +287,7 @@ def export_timestamped_mesh_seq(
     else:
         mesh_seq = mesh_seq[: len(timestamps)]
         print("Warning: more meshes than images, truncating meshes to match.")
-    return {ts: mesh for ts, mesh in zip(timestamps, mesh_seq)}
+    return {int(ts): mesh for ts, mesh in zip(timestamps, mesh_seq)}
 
 
 def render_on_images(

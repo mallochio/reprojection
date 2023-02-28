@@ -34,7 +34,7 @@ def annotate_capture(
     humor_docker_script: str,
     basecam_to_world_pth: str,
     world_to_destcam_pth: str,
-) -> dict:
+) -> Dict[int, trimesh.Trimesh]:
     """Go through a capture folder, annotate each subsequence where a person was detected, and
     reproject the HuMoR output to the other camera. Then, join the reprojected mesh sequences into
     the final annotation for the sequence.
@@ -43,6 +43,8 @@ def annotate_capture(
         humor_docker_script (str): Path to the HuMoR Docker script that will run the docker image.
         basecam_to_world_pth (str): Path to the origin camera (which recorded the capture) to world transformation matrix.
         world_to_destcam_pth (str): Path to the world to the destination camera (to which we are reprojecting, i.e. the omni cam) transformation matrix.
+    Returns:
+        dict: key=timestamp of fitted image (base cam), value=reprojected fitted mesh (dest cam)
     """
     print(f"[*] Annotating capture {capture_path}...")
     print("\t-> Preprocessing...")
@@ -82,9 +84,7 @@ def annotate_capture(
                 # TODO: Write a bash script that will run the docker image and the inference script.
                 # For a first single-threaded PoC, the input video file and output older should
                 # probably be fixed.
-                humor_output_path = os.path.join(
-                    capture_path, OUTPUT_FOLDER
-                )
+                humor_output_path = os.path.join(capture_path, OUTPUT_FOLDER)
                 if not humor_was_run:
                     # TODO: define this
                     os.system(
@@ -95,7 +95,7 @@ def annotate_capture(
                     world_to_destcam_pth,
                     humor_output_path,
                     capture_path,
-                )  # key=timestamp of fitted image (cam0), value=reprojected fitted mesh (cam1)
+                )  # key=timestamp of fitted image (base cam), value=reprojected fitted mesh (dest cam)
                 assert (
                     timestamped_meshes is not None and type(timestamped_meshes) == dict
                 ), "reproject_humor_sequence.main() did not return a dict"
@@ -131,11 +131,13 @@ def main(dataset_path: str, humor_docker_script: str):
                 room/
                     calib/
                         k0-omni/
+                            extrinsics.pkl
                             capture0
                             capture1
                             ...
                             omni
                         k1-omni/
+                            extrinsics.pkl
                             ...
                         ...
                     participant/
@@ -152,21 +154,30 @@ def main(dataset_path: str, humor_docker_script: str):
                         omni/ <-- Omni capture
     """
     current_room_calib = {}
-    loading_calib = True
     sequence_annotations = []
-    for root, dirs, _ in os.walk(dataset_path):
+    for root, dirs, files in os.walk(dataset_path):
         folder = os.path.basename(root)
         if folder == "calib" or folder == "Calibration":
-            # TODO: Load the extrinsic calibration matrices
-            # Skip this folder and don't walk through it
+            current_room_calib = {
+                os.path.basename(fpath).split(".")[0]: fpath
+                for fpath in files
+                if fpath.endswith(".pkl")
+            }
             dirs.clear()
         if folder.startswith("capture") and RGB_FOLDER in dirs:
-            sequence_annotations.append(annotate_capture(root, humor_docker_script,
-                                                         basecam_to_world_pth,
-                                                         world_to_destcam_pth))
-        # TODO: Detect when we're leaving a sequence and synchronize the annotations
-        final_seq_annotations = synchronize_annotations(sequence_annotations)
-        # TODO: Save the annotations to a file?
+            kinect_id = folder.split("capture")[1]
+            sequence_annotations.append(
+                annotate_capture(
+                    root,
+                    humor_docker_script,
+                    current_room_calib[f"k{kinect_id}-world"],
+                    current_room_calib[f"world-omni"]
+                )
+            )
+        if "omni" in dirs and len(sequence_annotations) > 0:
+            # TODO: Detect when we're leaving a sequence and synchronize the annotations
+            final_seq_annotations = synchronize_annotations(sequence_annotations)
+            # TODO: Save the annotations to a file?
 
 
 parser = argparse.ArgumentParser(description="HuMoR-based annotation pipeline.")
