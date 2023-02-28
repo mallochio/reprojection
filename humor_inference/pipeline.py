@@ -65,9 +65,11 @@ def annotate_capture(
         if "no_person" in seq_name or "person" not in seq_name:
             continue
         print(f"\t-> Processing {seq_name}...")
-        # TODO: Maybe pathc HuMoR so that it loads the images instead? The only problem is that
+        # TODO: Maybe patch HuMoR so that it loads the images instead? The only problem is that
         # HuMoR works for 30hz videos, so we would need to interpolate or duplicate the frames
-        # maybe? I think ffmpeg duplicates the frames by default. # TODO: Investigate this.
+        # maybe? With these parameters, FFMPEG just builds a 30hz video from the images but since
+        # we recorded at ~15hz, the video looks sped up. That might be the best way to deal with
+        # the disparity because the movements remain smooth, just faster.
         output_vid_file = os.path.join(capture_path, OUTPUT_FOLDER, f"{seq_name}.mp4")
         if not os.path.exists(output_vid_file):
             # print(f"\t\t-> Compiling {seq_name} into video file {output_vid_file}...")
