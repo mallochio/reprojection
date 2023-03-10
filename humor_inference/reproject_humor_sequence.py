@@ -182,7 +182,8 @@ SMPL_JOINTS = {
 
 SMPL_SIZES = {"trans": 3, "betas": 10, "pose_body": 63, "root_orient": 3}
 
-c2c = lambda tensor: tensor.detach().cpu().numpy()
+def c2c(tensor):
+    return tensor.detach().cpu().numpy()
 
 
 def prep_res(np_res, device, T):
@@ -438,15 +439,14 @@ def main(
     print("[*] Applying the transform to the SMPL models sequence...")
     transformed_meshes = transform_SMPL_sequence(pred_body, transform)
 
-    if cam1_calib_pth is not None:
-        with open(cam1_calib_pth, "rb") as f:
-            cam1_calib = pickle.load(f)
-        output_path = output_path if output_path is not None else "projected_output_viz"
-        os.makedirs(output_path, exist_ok=True)
-        render_on_images(images_path, transformed_meshes, cam1_calib, output_path)
-    else:
+    if cam1_calib_pth is None:
         # Return a dictionary of the transformed meshes where the keys are the matching image names (timestamps)
         return export_timestamped_mesh_seq(images_path, transformed_meshes)
+    with open(cam1_calib_pth, "rb") as f:
+        cam1_calib = pickle.load(f)
+    output_path = output_path if output_path is not None else "projected_output_viz"
+    os.makedirs(output_path, exist_ok=True)
+    render_on_images(images_path, transformed_meshes, cam1_calib, output_path)
 
 
 if __name__ == "__main__":

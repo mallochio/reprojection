@@ -1,6 +1,5 @@
 from pathlib import Path
 import sys
-import pandas as pd
 from os.path import abspath
 from tqdm import tqdm
 
@@ -11,6 +10,7 @@ import subprocess
 from config import load_config as conf
 config = conf.load_config()
 
+script_path = "/home/sid/Projects/OmniScience/code/reprojection/calibration/opencv_calibration/get_cam_pose.py"
 
 if __name__ == "__main__":
     base_dir = Path("/home/sid/Projects/OmniScience/dataset")
@@ -34,9 +34,7 @@ if __name__ == "__main__":
         else:
             # run get_cam_pose on the first image in each directory using the corresponding camera matrix
             img_path = path.glob("*.jpg").__next__()
-            camera_matrix_path = config[f"{dirtype}_params_{ix}"] if dirtype != "omni" else config[f"{dirtype}_params"]
-
-            script_path = "/home/sid/Projects/OmniScience/code/reprojection/calibration/opencv_calibration/get_cam_pose.py"
+            camera_matrix_path = config[f"{dirtype}_params_{ix}"] if dirtype != "omni" else config[f"{dirtype}_params"]            
             command = f"python {script_path} {img_path} {camera_matrix_path} --dst {path.parent} --prefix {ix}_{dirtype}"
             if dirtype == "omni":
                 command += " --fisheye"
