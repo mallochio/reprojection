@@ -24,8 +24,8 @@ IR_FOLDER = "ir"
 DEPTH_FOLDER = "depth"
 IUV_FOLDER = "rgb_dp2_iuv"
 MASK_FOLDER = "rgb_dp2_mask"
-OUTPUT_FOLDER = "preprocessed"
-
+OUTPUT_FOLDER = "humor_output"
+PREPROCESS_FOLDER = "preprocessed"
 PREPROCESS_THRESHOLD = 0.24
 
 
@@ -46,23 +46,26 @@ def annotate_capture(
     Returns:
         dict: key=timestamp of fitted image (base cam), value=reprojected fitted mesh (dest cam)
     """
-    capture_path = os.path.join("/openpose", capture_path) # TODO: remove this, this is for running in docker
+    capture_path = os.path.join(
+        "/openpose", capture_path
+    )  # TODO: remove this, this is for running in docker
 
     print(f"[*] Annotating capture {capture_path}...")
-    print("\t-> Preprocessing...")
-    # Redirect the prints to a log file
-    with open(os.path.join(capture_path, "preprocess.log"), "w") as f:
-        with redirect_stdout(f):
-            preprocess(
-                capture_path,
-                os.path.join(capture_path, OUTPUT_FOLDER),
-                debug=False,
-                threshold=PREPROCESS_THRESHOLD,
-            )
-    print("\t-> Preprocessing done.")
+    if not os.path.isdir(os.path.join(capture_path, PREPROCESS_FOLDER)):
+        print("\t-> Preprocessing...")
+        # Redirect the prints to a log file
+        with open(os.path.join(capture_path, "preprocess.log"), "w") as f:
+            with redirect_stdout(f):
+                preprocess(
+                    capture_path,
+                    os.path.join(capture_path, PREPROCESS_FOLDER),
+                    debug=False,
+                    threshold=PREPROCESS_THRESHOLD,
+                )
+        print("\t-> Preprocessing done.")
     sequence_meshes = {}
     # Compile each "person" subsequence into a video file and process it
-    for root, _, _ in os.walk(os.path.join(capture_path, OUTPUT_FOLDER)):
+    for root, _, _ in os.walk(os.path.join(capture_path, PREPROCESS_FOLDER)):
         seq_name = os.path.basename(root)
         if "no_person" in seq_name or "person" not in seq_name:
             continue
@@ -73,14 +76,16 @@ def annotate_capture(
         # maybe? With these parameters, FFMPEG just builds a 30hz video from the images but since
         # we recorded at ~15hz, the video looks sped up. That might be the best way to deal with
         # the disparity because the movements remain smooth, just faster.
-        output_vid_file = os.path.join(capture_path, OUTPUT_FOLDER, f"{seq_name}.mp4")
+        output_vid_file = os.path.join(
+            capture_path, PREPROCESS_FOLDER, f"{seq_name}.mp4"
+        )
         if not os.path.exists(output_vid_file):
             print(f"\t\t-> Compiling {seq_name} into video file {output_vid_file}...")
             os.system(
-                f"ffmpeg -framerate 30 -pattern_type glob -i '{root}/*.jpg' -c:v -loglevel quiet"
-                + f" libx264 -r 30 {output_vid_file} >"
-                + f" {os.path.join(capture_path, OUTPUT_FOLDER, 'ffmpeg.log')} 2>&1"
+                f"ffmpeg -framerate 30 -pattern_type glob -i '{root}/*.jpg' -c:v"
+                + f" libx264 -r 30 -loglevel quiet {output_vid_file}"
             )
+            print(f"\t\t-> Output file {output_vid_file} created.")
         with open(os.path.join(capture_path, "humor.log"), "w") as f:
             with redirect_stdout(f):
                 # TODO: Check if HuMoR was already ran on this subsequence and skip it if so
@@ -90,23 +95,20 @@ def annotate_capture(
                 # For a first single-threaded PoC, the input video file and output folder should
                 # probably be fixed.
                 humor_output_path = os.path.join(capture_path, OUTPUT_FOLDER)
-                print(f"humor output path is {humor_output_path}")
-                if not humor_was_run:                    
+                if os.path.isdir(humor_output_path):
+                    # This line emove the directory with all its contents:
+                    os.system(f"rm -rf {humor_output_path}")
+
+                if not humor_was_run:
                     # TODO: Refine this, current workflow is clunky
                     try:
-                        print("Running humor")
-                        os.system(                        
-                            f"python3.7 /openpose/data/other/humor/humor/fitting/run_fitting.py \
-                                @/openpose/data/other/humor/configs/fit_rgb_demo_use_split.cfg \
-                                --openpose /openpose/ \
-                                --data-path {output_vid_file} \
-                                --out {humor_output_path}"
-                            # f"bash {humor_docker_script} {capture_path} {humor_output_path}"
+                        os.system(
+                            f"bash {humor_docker_script} {output_vid_file} {humor_output_path}"
                         )
-                    except FileNotFoundError():
-                        raise Exception("humor failed,  file not found")
+                    except FileNotFoundError as e:
+                        raise Exception("humor failed: ", e)
                     except Exception as e:
-                        raise Exception("humor failed,  exception")
+                        raise Exception("humor failed: ", e)
 
                 timestamped_meshes = reproject(
                     basecam_to_world_pth,

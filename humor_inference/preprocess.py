@@ -100,11 +100,12 @@ def save_subsequence(
     )
     os.makedirs(subsequence_path, exist_ok=True)
     # Copy the frames of the sub-sequence to the output directory
-    for frame_path in subsequence:        
-        if not os.path.exists(os.path.join(subsequence_path, os.path.basename(frame_path))):
+    for frame_path in subsequence:
+        if not os.path.exists(
+            os.path.join(subsequence_path, os.path.basename(frame_path))
+        ):
             os.symlink(
-                frame_path, 
-                os.path.join(subsequence_path, os.path.basename(frame_path))
+                frame_path, os.path.join(subsequence_path, os.path.basename(frame_path))
             )
 
 
