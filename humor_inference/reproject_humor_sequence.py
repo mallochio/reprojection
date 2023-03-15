@@ -13,7 +13,6 @@ import argparse
 import os
 import pickle
 from typing import List, Optional
-
 import cv2 as cv
 import numpy as np
 import torch
@@ -402,8 +401,10 @@ def main(
     device = (
         torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
     )
-
+    
+    print(f"Humor output path: {humor_output_path}")
     results_dir = os.path.join(humor_output_path, "final_results")
+    print(f"Results directory: {results_dir}")
     pred_res = np.load(os.path.join(results_dir, "stage3_results.npz"))
     T = pred_res["trans"].shape[0]
     sanitize_preds(pred_res, T)

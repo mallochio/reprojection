@@ -100,10 +100,11 @@ def save_subsequence(
     )
     os.makedirs(subsequence_path, exist_ok=True)
     # Copy the frames of the sub-sequence to the output directory
-    for frame_path in subsequence:
-        if not os.path.exists(frame_path):
+    for frame_path in subsequence:        
+        if not os.path.exists(os.path.join(subsequence_path, os.path.basename(frame_path))):
             os.symlink(
-                frame_path, os.path.join(subsequence_path, os.path.basename(frame_path))
+                frame_path, 
+                os.path.join(subsequence_path, os.path.basename(frame_path))
             )
 
 
@@ -214,6 +215,7 @@ def main(
     # Save the last sub-sequence if there's one remaining
     if contains_person:
         contains_person = len(current_subsequence) >= MIN_FRAMES_FOR_PERSON
+    print("[*] Saving all sub-sequences...")
     save_subsequence(current_subsequence, subsequence_idx, contains_person, output_path)
 
 
