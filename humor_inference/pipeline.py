@@ -50,7 +50,7 @@ def annotate_capture(
         "/openpose", capture_path
     )  # TODO: remove this, this is for running in docker
 
-    print(f"[*] Annotating capture {capture_path}...")
+    print("[*] Annotating capture {capture_path}...".format(capture_path=capture_path))
     if not os.path.isdir(os.path.join(capture_path, PREPROCESS_FOLDER)):
         print("\t-> Preprocessing...")
         # Redirect the prints to a log file
@@ -69,23 +69,35 @@ def annotate_capture(
         seq_name = os.path.basename(root)
         if "no_person" in seq_name or "person" not in seq_name:
             continue
-        print(f"Capture path is {capture_path}")
-        print(f"\t-> Processing {seq_name}...")
+        print("Capture path is {capture_path}".format(capture_path=capture_path))
+        print("\t-> Processing {seq_name}...".format(seq_name=seq_name))
         # TODO: Maybe patch HuMoR so that it loads the images instead? The only problem is that
         # HuMoR works for 30hz videos, so we would need to interpolate or duplicate the frames
         # maybe? With these parameters, FFMPEG just builds a 30hz video from the images but since
         # we recorded at ~15hz, the video looks sped up. That might be the best way to deal with
         # the disparity because the movements remain smooth, just faster.
         output_vid_file = os.path.join(
-            capture_path, PREPROCESS_FOLDER, f"{seq_name}.mp4"
+            capture_path, PREPROCESS_FOLDER, "{seq_name}.mp4".format(seq_name=seq_name)
         )
         if not os.path.exists(output_vid_file):
-            print(f"\t\t-> Compiling {seq_name} into video file {output_vid_file}...")
-            os.system(
-                f"ffmpeg -framerate 30 -pattern_type glob -i '{root}/*.jpg' -c:v"
-                + f" libx264 -r 30 -loglevel quiet {output_vid_file}"
+            print(
+                "\t\t-> Compiling {seq_name} into video file {output_vid_file}...".format(
+                    seq_name=seq_name, output_vid_file=output_vid_file
+                )
             )
-            print(f"\t\t-> Output file {output_vid_file} created.")
+            os.system(
+                "ffmpeg -framerate 30 -pattern_type glob -i '{root}/*.jpg' -c:v".format(
+                    root=root
+                )
+                + " libx264 -r 30 -loglevel quiet {output_vid_file}".format(
+                    output_vid_file=output_vid_file
+                )
+            )
+            print(
+                "\t\t-> Output file {output_vid_file} created.".format(
+                    output_vid_file=output_vid_file
+                )
+            )
         with open(os.path.join(capture_path, "humor.log"), "w") as f:
             with redirect_stdout(f):
                 # TODO: Check if HuMoR was already ran on this subsequence and skip it if so
@@ -97,13 +109,21 @@ def annotate_capture(
                 humor_output_path = os.path.join(capture_path, OUTPUT_FOLDER)
                 if os.path.isdir(humor_output_path):
                     # This line emove the directory with all its contents:
-                    os.system(f"rm -rf {humor_output_path}")
+                    os.system(
+                        "rm -rf {humor_output_path}".format(
+                            humor_output_path=humor_output_path
+                        )
+                    )
 
                 if not humor_was_run:
                     # TODO: Refine this, current workflow is clunky
                     try:
                         os.system(
-                            f"bash {humor_docker_script} {output_vid_file} {humor_output_path}"
+                            "bash {humor_docker_script} {output_vid_file} {humor_output_path}".format(
+                                humor_docker_script=humor_docker_script,
+                                output_vid_file=output_vid_file,
+                                humor_output_path=humor_output_path,
+                            )
                         )
                     except FileNotFoundError as e:
                         raise Exception("humor failed: ", e)
@@ -179,7 +199,7 @@ def get_calibration_files(root) -> Dict[str, str]:
             if fpath.endswith(".pkl"):
                 current_room_calib[
                     os.path.basename(fpath).split(".")[0]
-                ] = f"{calib_root}/{fpath}"
+                ] = "{calib_root}/{fpath}".format(calib_root=calib_root, fpath=fpath)
 
     return current_room_calib
 
@@ -196,8 +216,12 @@ def annotate_participants(dirs, root, humor_docker_script, current_room_calib):
                 sequence_meshes = annotate_capture(
                     capture_root,
                     humor_docker_script,
-                    current_room_calib[f"k{kinect_id}_rgb_cam_to_world"],
-                    current_room_calib[f"k{kinect_id}_omni_world_to_cam"],
+                    current_room_calib[
+                        "k{kinect_id}_rgb_cam_to_world".format(kinect_id=kinect_id)
+                    ],
+                    current_room_calib[
+                        "k{kinect_id}_omni_world_to_cam".format(kinect_id=kinect_id)
+                    ],
                 )
                 sequence_annotations.append(sequence_meshes)
     return sequence_annotations
@@ -243,7 +267,7 @@ def main(dataset_path: str, humor_docker_script: str):
         if "calib" in dirs:
             # Now we are in a room folder, so we can get the
             # extrinsics for the current room and annotate the sequences
-            print(f"[*] Processing sequences from {root}")
+            print("[*] Processing sequences from {root}".format(root=root))
             current_room_calib = get_calibration_files(root)
             sequence_annotations = annotate_participants(
                 dirs, root, humor_docker_script, current_room_calib
