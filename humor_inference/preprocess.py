@@ -57,7 +57,7 @@ def compute_body_coverage(seg_mask, iuv_map, debug=False):
         # Compute the weighted surface area of the body part
         part_surface_areas[part] = max(50, intersection.sum()) / body_pixels.sum()
         if debug:
-            print("{part}: {part_surface_areas[part]}px".format(part=part))
+            print(f"{part}: {part_surface_areas[part]}px")
 
     ideal_distribution = {
         "torso": 0.4,
@@ -73,12 +73,12 @@ def compute_body_coverage(seg_mask, iuv_map, debug=False):
     div = sum(kl_div(list(ideal_distribution.values()), computed_distribution))
     if debug:
         print(ideal_distribution, computed_distribution)
-        print("KL divergence: {div}".format(div=div))
+        print(f"KL divergence: {div}")
 
     # Move to the [0,1] range via a sigmoid function
     diversity_metric = 1 / (1 + np.exp(div))
     if debug:
-        print("diversity: {diversity_metric}".format(diversity_metric=diversity_metric))
+        print(f"diversity: {diversity_metric}")
     return diversity_metric
 
 
@@ -92,11 +92,7 @@ def save_subsequence(
         subsequence_idx (int): Index of the sub-sequence.
         output_path (str): Path to the output directory.
     """
-    print(
-        "[*] Saving sub-sequence {subsequence_idx}...".format(
-            subsequence_idx=subsequence_idx
-        )
-    )
+    print(f"[*] Saving sub-sequence {subsequence_idx}...")
     # Create the output directory for the sub-sequence
     subsequence_path = os.path.join(
         output_path,
