@@ -29,9 +29,9 @@ PREPROCESS_FOLDER = "preprocessed"
 PREPROCESS_THRESHOLD = 0.24
 
 CAM_INTRINSICS_PATH = {
-    "k0": "../calibration/intrinsics/k0_rgb_calib.pkl",
-    "k1": "../calibration/intrinsics/k1_rgb_calib.pkl",
-    "omni": "../calibration/intrinsics/omni_calib.pkl",
+    "k0": "../calibration/intrinsics/k0_rgb_calib.json",
+    "k1": "../calibration/intrinsics/k1_rgb_calib.json",
+    "omni": "../calibration/intrinsics/omni_calib.json",
 }
 
 
@@ -92,7 +92,7 @@ def annotate_capture(
         with open(os.path.join(capture_path, "humor.log"), "w") as f:
             with redirect_stdout(f):
                 # TODO: Check if HuMoR was already ran on this subsequence and skip it if so
-                humor_was_run = False
+                humor_was_run = os.path.isfile(os.path.join(capture_path, OUTPUT_FOLDER, "final_results", "stage3_results.npz"))
                 # Run the HuMoR Docker script
                 # TODO: Write a bash script that will run the docker image and the inference script.
                 # For a first single-threaded PoC, the input video file and output folder should
@@ -106,7 +106,6 @@ def annotate_capture(
                     # TODO: Refine this, current workflow is clunky
                     try:
                         os.system(
-
                             f"bash {humor_docker_script} {output_vid_file} {humor_output_path} {os.path.abspath(base_cam_intrinsics_path)}"
                         )
                     except FileNotFoundError as e:
@@ -123,6 +122,8 @@ def annotate_capture(
                 assert (
                     timestamped_meshes is not None and type(timestamped_meshes) == dict
                 ), "reproject_humor_sequence.main() did not return a dict"
+                print(f"\t\t-> Deleting {humor_output_path}...")
+                os.system(f"rm -rf {humor_output_path}")
             for timestamp, mesh in timestamped_meshes.items():
                 if timestamp in sequence_meshes:
                     # TODO: We'll need to average these boys (in the sync function?)
@@ -178,7 +179,7 @@ def get_calibration_files(root) -> Dict[str, str]:
     # Now we are in a room folder, so we can get the extrinsics for the current room
     # Get all the sequence calibration files first by traversing calib folder, we need this to process captures
     calib_folder = os.path.join(root, "calib")
-    for calib_root, calib_dirs, calib_files in os.walk(calib_folder):
+    for calib_root, _, calib_files in os.walk(calib_folder):
         for fpath in calib_files:
             if fpath.endswith(".pkl"):
                 current_room_calib[
@@ -188,23 +189,20 @@ def get_calibration_files(root) -> Dict[str, str]:
     return current_room_calib
 
 
-def annotate_participants(dirs, root, humor_docker_script, current_room_calib):
+def annotate_participant(root, humor_docker_script, current_room_calib):
     sequence_annotations = []
-    participants = [d for d in dirs if d != "calib"]
-    for participant in participants:
-        capture_folder = os.path.join(root, participant)
-        for capture_root, capture_dirs, capture_files in os.walk(capture_folder):
-            capture_name = os.path.basename(capture_root)
-            if capture_name.startswith("capture"):
-                kinect_id = capture_name.split("capture")[1]
-                sequence_meshes = annotate_capture(
-                    capture_root,
-                    humor_docker_script,
-                    CAM_INTRINSICS_PATH[f"k{kinect_id}"],
-                    current_room_calib[f"k{kinect_id}_rgb_cam_to_world"],
-                    current_room_calib[f"k{kinect_id}_omni_world_to_cam"],
-                )
-                sequence_annotations.append(sequence_meshes)
+    for capture_root, _, _ in os.walk(root):
+        capture_name = os.path.basename(capture_root)
+        if capture_name.startswith("capture"):
+            kinect_id = capture_name.split("capture")[1]
+            sequence_meshes = annotate_capture(
+                capture_root,
+                humor_docker_script,
+                CAM_INTRINSICS_PATH[f"k{kinect_id}"],
+                current_room_calib[f"k{kinect_id}_rgb_cam_to_world"],
+                current_room_calib[f"k{kinect_id}_omni_world_to_cam"],
+            )
+            sequence_annotations.append(sequence_meshes)
     return sequence_annotations
 
 
@@ -244,19 +242,26 @@ def main(dataset_path: str, humor_docker_script: str):
                         omni/ <-- Omni capture
     """
     assert os.path.isdir("checkpoints"), "Please run ln -s /path/to/humor/checkpoints ."
-    # TODO: refactor this to remove the three nested for loops
+
+    sequence_annotations = []
+    current_room_calib = {}
     for root, dirs, files in os.walk(dataset_path):
+        folder = os.path.basename(root)
         if "calib" in dirs:
             # Now we are in a room folder, so we can get the
             # extrinsics for the current room and annotate the sequences
-            print(f"[*] Processing sequences from {root}")
+            print(f"[*] Processing sequences from {folder}")
             current_room_calib = get_calibration_files(root)
-            sequence_annotations = annotate_participants(
-                dirs, root, humor_docker_script, current_room_calib
-            )
+            dirs.pop(dirs.index("calib"))
 
-        if "omni" in dirs and len(sequence_annotations) > 0:
+        elif "capture0" in dirs:
+            # We're now in a participant sequence folder
+            print(f"\t[*] Processing participant '{folder}'")
+            sequence_annotations = annotate_participant(
+                root, humor_docker_script, current_room_calib
+            )
             # os.walk is depth-first, so we should have all the sequence annotations
+            print("\t\t-> Merging sequences...")
             synced_filenames = []
             with open(os.path.join(root, "synced_filenames.txt"), "r") as file:
                 for line in file:
@@ -267,15 +272,16 @@ def main(dataset_path: str, humor_docker_script: str):
             )
             print(final_seq_annotations)
             # TODO: Save the annotations to a file?
+            dirs.clear()
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="HuMoR-based annotation pipeline.")
     parser.add_argument("dataset_path", help="Path to the dataset to annotate.")
     parser.add_argument(
-        "--humor-docker-script",
-        help="Path to the HuMoR Docker script that will run the docker image and the inference script.",
+        "--humor-script",
+        help="Path to the HuMoR script that will run the inference.",
         required=True,
     )
     args = parser.parse_args()
-    main(args.dataset_path, args.humor_docker_script)
+    main(args.dataset_path, args.humor_script)
