@@ -28,10 +28,17 @@ OUTPUT_FOLDER = "humor_output"
 PREPROCESS_FOLDER = "preprocessed"
 PREPROCESS_THRESHOLD = 0.24
 
+CAM_INTRINSICS_PATH = {
+    "k0": "../calibration/intrinsics/k0_rgb_calib.pkl",
+    "k1": "../calibration/intrinsics/k1_rgb_calib.pkl",
+    "omni": "../calibration/intrinsics/omni_calib.pkl",
+}
+
 
 def annotate_capture(
     capture_path: str,
     humor_docker_script: str,
+    base_cam_intrinsics_path: str,
     basecam_to_world_pth: str,
     world_to_destcam_pth: str,
 ) -> Dict[int, trimesh.Trimesh]:
@@ -46,10 +53,6 @@ def annotate_capture(
     Returns:
         dict: key=timestamp of fitted image (base cam), value=reprojected fitted mesh (dest cam)
     """
-    capture_path = os.path.join(
-        "/openpose", capture_path
-    )  # TODO: remove this, this is for running in docker
-
     print(f"[*] Annotating capture {capture_path}...")
     if not os.path.isdir(os.path.join(capture_path, PREPROCESS_FOLDER)):
         print("\t-> Preprocessing...")
@@ -102,9 +105,13 @@ def annotate_capture(
                 if not humor_was_run:
                     # TODO: Refine this, current workflow is clunky
                     try:
-                        os.system(
-                            f"bash {humor_docker_script} {output_vid_file} {humor_output_path}"
+                        print(
+
+                            f"bash {humor_docker_script} {output_vid_file} {humor_output_path} {os.path.abspath(base_cam_intrinsics_path)}"
                         )
+                        # os.system(
+                            # f"bash {humor_docker_script} {output_vid_file} {humor_output_path} {base_cam_intrinsics_path}"
+                        # )
                     except FileNotFoundError as e:
                         raise Exception("humor failed: ", e)
                     except Exception as e:
@@ -196,6 +203,7 @@ def annotate_participants(dirs, root, humor_docker_script, current_room_calib):
                 sequence_meshes = annotate_capture(
                     capture_root,
                     humor_docker_script,
+                    CAM_INTRINSICS_PATH[f"k{kinect_id}"],
                     current_room_calib[f"k{kinect_id}_rgb_cam_to_world"],
                     current_room_calib[f"k{kinect_id}_omni_world_to_cam"],
                 )
