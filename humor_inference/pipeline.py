@@ -275,6 +275,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--humor-docker-script",
         help="Path to the HuMoR Docker script that will run the docker image and the inference script.",
+        required=True,
     )
     args = parser.parse_args()
     main(args.dataset_path, args.humor_docker_script)
