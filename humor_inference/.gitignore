@@ -1,3 +1,4 @@
 *.tgz
 out/
 checkpoints/
+checkpoints

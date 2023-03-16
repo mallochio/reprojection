@@ -242,6 +242,7 @@ def main(dataset_path: str, humor_docker_script: str):
                         omni/ <-- Omni capture
     """
     assert os.path.isdir("checkpoints"), "Please run ln -s /path/to/humor/checkpoints ."
+    assert os.path.isdir("body_models"), "Please run ln -s /path/to/humor/body_models ."
 
     sequence_annotations = []
     current_room_calib = {}
