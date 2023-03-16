@@ -11,6 +11,7 @@ HuMoR-based annotation pipeline.
 
 import argparse
 import os
+import pickle
 import subprocess
 import numpy as np
 import trimesh
@@ -92,12 +93,12 @@ def annotate_capture(
         with open(os.path.join(capture_path, "humor.log"), "w") as f:
             with redirect_stdout(f):
                 # TODO: Check if HuMoR was already ran on this subsequence and skip it if so
-                humor_was_run = os.path.isfile(os.path.join(capture_path, OUTPUT_FOLDER, "final_results", "stage3_results.npz"))
+                humor_output_path = os.path.join(capture_path, OUTPUT_FOLDER, seq_name)
+                humor_was_run = os.path.isfile(os.path.join(humor_output_path, "final_results", "stage3_results.npz"))
                 # Run the HuMoR Docker script
                 # TODO: Write a bash script that will run the docker image and the inference script.
                 # For a first single-threaded PoC, the input video file and output folder should
                 # probably be fixed.
-                humor_output_path = os.path.join(capture_path, OUTPUT_FOLDER)
                 if os.path.isdir(humor_output_path):
                     # This line emove the directory with all its contents:
                     os.system(f"rm -rf {humor_output_path}")
@@ -122,8 +123,8 @@ def annotate_capture(
                 assert (
                     timestamped_meshes is not None and type(timestamped_meshes) == dict
                 ), "reproject_humor_sequence.main() did not return a dict"
-                print(f"\t\t-> Deleting {humor_output_path}...")
-                os.system(f"rm -rf {humor_output_path}")
+                # print(f"\t\t-> Deleting {humor_output_path}...")
+                # os.system(f"rm -rf {humor_output_path}")
             for timestamp, mesh in timestamped_meshes.items():
                 if timestamp in sequence_meshes:
                     # TODO: We'll need to average these boys (in the sync function?)
@@ -271,8 +272,9 @@ def main(dataset_path: str, humor_docker_script: str):
             final_seq_annotations = synchronize_annotations(
                 sequence_annotations, synced_filenames, root
             )
-            print(final_seq_annotations)
-            # TODO: Save the annotations to a file?
+            print("\t\t-> Saving annotations...")
+            with open(f"{root}/pose_labels.pkl", "wb") as file:
+                pickle.dump(final_seq_annotations, file)
             dirs.clear()
 
 
