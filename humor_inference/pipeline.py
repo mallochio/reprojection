@@ -246,6 +246,7 @@ def main(dataset_path: str, humor_docker_script: str):
                         ...
                         omni/ <-- Omni capture
     """
+    assert os.path.isdir("checkpoints"), "Please run ln -s /path/to/humor/checkpoints ."
     # TODO: refactor this to remove the three nested for loops
     for root, dirs, files in os.walk(dataset_path):
         if "calib" in dirs:
