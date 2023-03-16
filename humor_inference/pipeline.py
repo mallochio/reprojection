@@ -105,13 +105,10 @@ def annotate_capture(
                 if not humor_was_run:
                     # TODO: Refine this, current workflow is clunky
                     try:
-                        print(
+                        os.system(
 
                             f"bash {humor_docker_script} {output_vid_file} {humor_output_path} {os.path.abspath(base_cam_intrinsics_path)}"
                         )
-                        # os.system(
-                            # f"bash {humor_docker_script} {output_vid_file} {humor_output_path} {base_cam_intrinsics_path}"
-                        # )
                     except FileNotFoundError as e:
                         raise Exception("humor failed: ", e)
                     except Exception as e:
