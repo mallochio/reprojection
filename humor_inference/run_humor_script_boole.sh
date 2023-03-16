@@ -11,6 +11,6 @@ python /home/tmorales/humor/humor/fitting/run_fitting.py \
                                 --openpose /openpose \
                                 --data-path $1 \
                                 --out $2 \
-                                --batch-size 64 \
+                                --batch-size 32 \
                                 --rgb-intrinsics $3
 
