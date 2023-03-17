@@ -42,10 +42,11 @@ def annotate_capture(
     base_cam_intrinsics_path: str,
     basecam_to_world_pth: str,
     world_to_destcam_pth: str,
+    keep_dirty: bool = False,
 ) -> Dict[int, trimesh.Trimesh]:
-    """Go through a capture folder, annotate each subsequence where a person was detected, and
-    reproject the HuMoR output to the other camera. Then, join the reprojected mesh sequences into
-    the final annotation for the sequence.
+    """Go through a capture folder for one participant in one location, annotate each subsequence
+    where a person was detected, and reproject the HuMoR output to the other camera. Then, join the
+    reprojected mesh sequences into the final annotation for the sequence.
     Args:
         capture_path (str): Path to the capture folder.
         humor_docker_script (str): Path to the HuMoR Docker script that will run the docker image.
@@ -94,11 +95,13 @@ def annotate_capture(
             with redirect_stdout(f):
                 # TODO: Check if HuMoR was already ran on this subsequence and skip it if so
                 humor_output_path = os.path.join(capture_path, OUTPUT_FOLDER, seq_name)
-                humor_was_run = os.path.isfile(os.path.join(humor_output_path, "final_results", "stage3_results.npz"))
+                humor_was_run = os.path.isfile(
+                    os.path.join(
+                        humor_output_path, "final_results", "stage3_results.npz"
+                    )
+                )
                 # Run the HuMoR Docker script
-                # TODO: Write a bash script that will run the docker image and the inference script.
-                # For a first single-threaded PoC, the input video file and output folder should
-                # probably be fixed.
+                # TODO: Parallelize this if possible
                 if os.path.isdir(humor_output_path):
                     # This line emove the directory with all its contents:
                     os.system(f"rm -rf {humor_output_path}")
@@ -123,8 +126,9 @@ def annotate_capture(
                 assert (
                     timestamped_meshes is not None and type(timestamped_meshes) == dict
                 ), "reproject_humor_sequence.main() did not return a dict"
-                # print(f"\t\t-> Deleting {humor_output_path}...")
-                # os.system(f"rm -rf {humor_output_path}")
+                if not keep_dirty:
+                    print(f"\t\t-> Deleting {humor_output_path}...")
+                    os.system(f"rm -rf {humor_output_path}")
             for timestamp, mesh in timestamped_meshes.items():
                 if timestamp in sequence_meshes:
                     # TODO: We'll need to average these boys (in the sync function?)
@@ -190,8 +194,13 @@ def get_calibration_files(root) -> Dict[str, str]:
     return current_room_calib
 
 
-def annotate_participant(root, humor_docker_script, current_room_calib):
-    sequence_annotations = []
+def annotate_participant(root, humor_docker_script, current_room_calib, keep_dirty) -> List[Dict[int, trimesh.Trimesh]]:
+    """
+    Returns a list of viewpoint annotations for each capture in the participant folder. The
+    annotations are dictionaries with the timestamp of the image as the key and the
+    reprojected mesh as the value.
+    """
+    multi_view_sequence_annotations = []
     for capture_root, _, _ in os.walk(root):
         capture_name = os.path.basename(capture_root)
         if capture_name.startswith("capture"):
@@ -202,12 +211,13 @@ def annotate_participant(root, humor_docker_script, current_room_calib):
                 CAM_INTRINSICS_PATH[f"k{kinect_id}"],
                 current_room_calib[f"k{kinect_id}_rgb_cam_to_world"],
                 current_room_calib[f"k{kinect_id}_omni_world_to_cam"],
+                keep_dirty,
             )
-            sequence_annotations.append(sequence_meshes)
-    return sequence_annotations
+            multi_view_sequence_annotations.append(sequence_meshes)
+    return multi_view_sequence_annotations
 
 
-def main(dataset_path: str, humor_docker_script: str):
+def main(dataset_path: str, humor_docker_script: str, keep_dirty: bool = False):
     """
     Args:
         dataset_path (str): Path to the dataset to annotate.
@@ -260,7 +270,7 @@ def main(dataset_path: str, humor_docker_script: str):
             # We're now in a participant sequence folder
             print(f"\t[*] Processing participant '{folder}'")
             sequence_annotations = annotate_participant(
-                root, humor_docker_script, current_room_calib
+                root, humor_docker_script, current_room_calib, keep_dirty
             )
             # os.walk is depth-first, so we should have all the sequence annotations
             print("\t\t-> Merging sequences...")
@@ -286,5 +296,11 @@ if __name__ == "__main__":
         help="Path to the HuMoR script that will run the inference.",
         required=True,
     )
+    parser.add_argument(
+        "--keep-dirty",
+        help="Whether to not clean the temporary files created during the annotation"
+        + " (HuMoR stuff, etc.). This is useful for debugging and development.",
+        action="store_true",
+    )
     args = parser.parse_args()
-    main(args.dataset_path, args.humor_script)
+    main(args.dataset_path, args.humor_script, args.keep_dirty)

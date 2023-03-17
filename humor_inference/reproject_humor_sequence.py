@@ -181,6 +181,7 @@ SMPL_JOINTS = {
 
 SMPL_SIZES = {"trans": 3, "betas": 10, "pose_body": 63, "root_orient": 3}
 
+
 def c2c(tensor):
     return tensor.detach().cpu().numpy()
 
@@ -401,7 +402,7 @@ def main(
     device = (
         torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
     )
-    
+
     print(f"Humor output path: {humor_output_path}")
     results_dir = os.path.join(humor_output_path, "final_results")
     print(f"Results directory: {results_dir}")
