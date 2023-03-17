@@ -97,7 +97,7 @@ def annotate_capture(
                 humor_output_path = os.path.join(capture_path, OUTPUT_FOLDER, seq_name)
                 humor_was_run = os.path.isfile(
                     os.path.join(
-                        humor_output_path, "final_results", "stage3_results.npz"
+                        humor_output_path, "results_out", "final_results", "stage3_results.npz"
                     )
                 )
                 # Run the HuMoR Docker script
