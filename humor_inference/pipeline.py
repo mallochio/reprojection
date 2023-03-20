@@ -102,10 +102,6 @@ def annotate_capture(
                 )
                 # Run the HuMoR Docker script
                 # TODO: Parallelize this if possible
-                if os.path.isdir(humor_output_path):
-                    # This line emove the directory with all its contents:
-                    os.system(f"rm -rf {humor_output_path}")
-
                 if not humor_was_run:
                     # TODO: Refine this, current workflow is clunky
                     try:
@@ -303,4 +299,4 @@ if __name__ == "__main__":
         action="store_true",
     )
     args = parser.parse_args()
-    main(args.dataset_path, args.humor_script, args.keep_dirty)
+    main(args.dataset_path, args.humor_script, keep_dirty=args.keep_dirty)
