@@ -404,7 +404,7 @@ def main(
     )
 
     print(f"Humor output path: {humor_output_path}")
-    results_dir = os.path.join(humor_output_path, "final_results")
+    results_dir = os.path.join(humor_output_path, "results_out", "final_results")
     print(f"Results directory: {results_dir}")
     pred_res = np.load(os.path.join(results_dir, "stage3_results.npz"))
     T = pred_res["trans"].shape[0]
