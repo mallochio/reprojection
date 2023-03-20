@@ -27,7 +27,9 @@ IUV_FOLDER = "rgb_dp2_iuv"
 MASK_FOLDER = "rgb_dp2_mask"
 OUTPUT_FOLDER = "humor_output"
 PREPROCESS_FOLDER = "preprocessed"
-PREPROCESS_THRESHOLD = 0.24
+SYNC_FILENAME = "synced_filenames.txt"
+PREPROCESS_THRESHOLD = 0.26
+PREPROCESS_MIN_FRAMES_PER_PERSON = 30
 
 CAM_INTRINSICS_PATH = {
     "k0": "../calibration/intrinsics/k0_rgb_calib.json",
@@ -58,6 +60,10 @@ def annotate_capture(
     print(f"[*] Annotating capture {capture_path}...")
     if not os.path.isdir(os.path.join(capture_path, PREPROCESS_FOLDER)):
         print("\t-> Preprocessing...")
+        with open(os.path.join(capture_path, "..", SYNC_FILENAME), "r") as file:
+            cameras = file.readline().strip().split(";")
+            start = file.readline().strip().split(";")
+            sequence_start_frame: str = start[cameras.index(os.path.basename(capture_path))]
         # Redirect the prints to a log file
         with open(os.path.join(capture_path, "preprocess.log"), "w") as f:
             with redirect_stdout(f):
@@ -66,6 +72,8 @@ def annotate_capture(
                     os.path.join(capture_path, PREPROCESS_FOLDER),
                     debug=False,
                     threshold=PREPROCESS_THRESHOLD,
+                    skip_until_frame=sequence_start_frame,
+                    min_frames_per_person=PREPROCESS_MIN_FRAMES_PER_PERSON,
                 )
         print("\t-> Preprocessing done.")
     sequence_meshes = {}
@@ -271,7 +279,7 @@ def main(dataset_path: str, humor_docker_script: str, keep_dirty: bool = False):
             # os.walk is depth-first, so we should have all the sequence annotations
             print("\t\t-> Merging sequences...")
             synced_filenames = []
-            with open(os.path.join(root, "synced_filenames.txt"), "r") as file:
+            with open(os.path.join(root, SYNC_FILENAME), "r") as file:
                 for line in file:
                     synced_filenames.append(line.strip().split(";"))
             synced_filenames = synced_filenames[1:]
