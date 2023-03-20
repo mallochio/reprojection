@@ -63,7 +63,9 @@ def annotate_capture(
         with open(os.path.join(capture_path, "..", SYNC_FILENAME), "r") as file:
             cameras = file.readline().strip().split(";")
             start = file.readline().strip().split(";")
-            sequence_start_frame: str = start[cameras.index(os.path.basename(capture_path))]
+            sequence_start_frame: str = start[
+                cameras.index(os.path.basename(capture_path))
+            ]
         # Redirect the prints to a log file
         with open(os.path.join(capture_path, "preprocess.log"), "w") as f:
             with redirect_stdout(f):
@@ -101,17 +103,13 @@ def annotate_capture(
             print(f"\t\t-> Output file {output_vid_file} created.")
         with open(os.path.join(capture_path, "humor.log"), "w") as f:
             with redirect_stdout(f):
-                # TODO: Check if HuMoR was already ran on this subsequence and skip it if so
                 humor_output_path = os.path.join(capture_path, OUTPUT_FOLDER, seq_name)
-                humor_was_run = os.path.isfile(
-                    os.path.join(
-                        humor_output_path, "results_out", "final_results", "stage3_results.npz"
-                    )
+                humor_was_run = os.path.isdir(
+                    os.path.join(humor_output_path, "results_out", "final_results")
                 )
                 # Run the HuMoR Docker script
                 # TODO: Parallelize this if possible
                 if not humor_was_run:
-                    # TODO: Refine this, current workflow is clunky
                     try:
                         os.system(
                             f"bash {humor_docker_script} {output_vid_file} {humor_output_path} {os.path.abspath(base_cam_intrinsics_path)}"
@@ -121,18 +119,26 @@ def annotate_capture(
                     except Exception as e:
                         raise Exception("humor failed: ", e)
 
+                # There's still a possibility that HuMoR fails and stage3_results.npz is missing.
+                # In that case, we should go on to the next sequence and maybe mark this one as
+                # failed somehow.
                 timestamped_meshes = reproject(
                     basecam_to_world_pth,
                     world_to_destcam_pth,
                     humor_output_path,
                     capture_path,
                 )  # key=timestamp of fitted image (base cam), value=reprojected fitted mesh (dest cam)
-                assert (
-                    timestamped_meshes is not None and type(timestamped_meshes) == dict
-                ), "reproject_humor_sequence.main() did not return a dict"
                 if not keep_dirty:
                     print(f"\t\t-> Deleting {humor_output_path}...")
                     os.system(f"rm -rf {humor_output_path}")
+                if timestamped_meshes is None:
+                    print(
+                        f"\t\t-> HuMoR failed to produce a result for {seq_name}. Skipping..."
+                    )
+                    continue
+                assert (
+                    type(timestamped_meshes) == dict
+                ), "reproject_humor_sequence.main() did not return a dict"
             for timestamp, mesh in timestamped_meshes.items():
                 if timestamp in sequence_meshes:
                     # TODO: We'll need to average these boys (in the sync function?)
@@ -198,7 +204,9 @@ def get_calibration_files(root) -> Dict[str, str]:
     return current_room_calib
 
 
-def annotate_participant(root, humor_docker_script, current_room_calib, keep_dirty) -> List[Dict[int, trimesh.Trimesh]]:
+def annotate_participant(
+    root, humor_docker_script, current_room_calib, keep_dirty
+) -> List[Dict[int, trimesh.Trimesh]]:
     """
     Returns a list of viewpoint annotations for each capture in the participant folder. The
     annotations are dictionaries with the timestamp of the image as the key and the

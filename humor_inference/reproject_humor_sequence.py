@@ -12,7 +12,7 @@ sequence on the corresponding image sequence.
 import argparse
 import os
 import pickle
-from typing import List, Optional
+from typing import Dict, List, Optional
 import cv2 as cv
 import numpy as np
 import torch
@@ -393,7 +393,7 @@ def main(
     images_path: str,
     output_path: Optional[str] = None,
     cam1_calib_pth: Optional[str] = None,
-):
+) -> Optional[Dict[int, trimesh.Trimesh]]:
     with open(cam0_to_world_pth, "rb") as f:
         cam0_to_world = make_44(pickle.load(f))
     with open(world_to_cam1_pth, "rb") as f:
@@ -403,10 +403,11 @@ def main(
         torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
     )
 
-    print(f"Humor output path: {humor_output_path}")
     results_dir = os.path.join(humor_output_path, "results_out", "final_results")
-    print(f"Results directory: {results_dir}")
-    pred_res = np.load(os.path.join(results_dir, "stage3_results.npz"))
+    res_file = os.path.join(results_dir, "stage3_results.npz")
+    if not os.path.isfile(res_file):
+        return None
+    pred_res = np.load(res_file)
     T = pred_res["trans"].shape[0]
     sanitize_preds(pred_res, T)
     pred_res = prep_res(pred_res, device, T)
