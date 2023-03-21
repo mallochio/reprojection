@@ -13,10 +13,11 @@ import argparse
 import os
 import pickle
 import subprocess
+import sys
 import numpy as np
 import trimesh
 from contextlib import redirect_stdout
-from typing import Dict, List
+from typing import Dict, List, Tuple
 from reproject_humor_sequence import main as reproject
 from preprocess import main as preprocess
 
@@ -45,6 +46,7 @@ def annotate_capture(
     basecam_to_world_pth: str,
     world_to_destcam_pth: str,
     keep_dirty: bool = False,
+    verbose: bool = False,
 ) -> Dict[int, trimesh.Trimesh]:
     """Go through a capture folder for one participant in one location, annotate each subsequence
     where a person was detected, and reproject the HuMoR output to the other camera. Then, join the
@@ -57,9 +59,11 @@ def annotate_capture(
     Returns:
         dict: key=timestamp of fitted image (base cam), value=reprojected fitted mesh (dest cam)
     """
-    print(f"[*] Annotating capture {capture_path}...")
+    if verbose:
+        print(f"[*] Annotating capture {capture_path}...")
     if not os.path.isdir(os.path.join(capture_path, PREPROCESS_FOLDER)):
-        print("\t-> Preprocessing...")
+        if verbose:
+            print("\t-> Preprocessing...")
         with open(os.path.join(capture_path, "..", SYNC_FILENAME), "r") as file:
             cameras = file.readline().strip().split(";")
             start = file.readline().strip().split(";")
@@ -68,7 +72,7 @@ def annotate_capture(
             ]
         # Redirect the prints to a log file
         with open(os.path.join(capture_path, "preprocess.log"), "w") as f:
-            with redirect_stdout(f):
+            with redirect_stdout(sys.stdout if verbose else f):
                 preprocess(
                     capture_path,
                     os.path.join(capture_path, PREPROCESS_FOLDER),
@@ -77,15 +81,16 @@ def annotate_capture(
                     skip_until_frame=sequence_start_frame,
                     min_frames_per_person=PREPROCESS_MIN_FRAMES_PER_PERSON,
                 )
-        print("\t-> Preprocessing done.")
+        if verbose:
+            print("\t-> Preprocessing done.")
     sequence_meshes = {}
     # Compile each "person" subsequence into a video file and process it
     for root, _, _ in os.walk(os.path.join(capture_path, PREPROCESS_FOLDER)):
         seq_name = os.path.basename(root)
         if "no_person" in seq_name or "person" not in seq_name:
             continue
-        print(f"Capture path is {capture_path}")
-        print(f"\t-> Processing {seq_name}...")
+        if verbose:
+            print(f"\t-> Processing {seq_name}...")
         # TODO: Maybe patch HuMoR so that it loads the images instead? The only problem is that
         # HuMoR works for 30hz videos, so we would need to interpolate or duplicate the frames
         # maybe? With these parameters, FFMPEG just builds a 30hz video from the images but since
@@ -95,14 +100,17 @@ def annotate_capture(
             capture_path, PREPROCESS_FOLDER, f"{seq_name}.mp4"
         )
         if not os.path.exists(output_vid_file):
-            print(f"\t\t-> Compiling {seq_name} into video file {output_vid_file}...")
+            if verbose:
+                print(
+                    f"\t\t-> Compiling {seq_name} into video file {output_vid_file}..."
+                )
             os.system(
                 f"ffmpeg -framerate 30 -pattern_type glob -i '{root}/*.jpg' -c:v"
                 + f" libx264 -r 30 -loglevel quiet {output_vid_file}"
             )
             print(f"\t\t-> Output file {output_vid_file} created.")
         with open(os.path.join(capture_path, "humor.log"), "w") as f:
-            with redirect_stdout(f):
+            with redirect_stdout(sys.stdout if verbose else f):
                 humor_output_path = os.path.join(capture_path, OUTPUT_FOLDER, seq_name)
                 humor_was_run = os.path.isdir(
                     os.path.join(humor_output_path, "results_out", "final_results")
@@ -126,10 +134,15 @@ def annotate_capture(
                     basecam_to_world_pth,
                     world_to_destcam_pth,
                     humor_output_path,
-                    capture_path,
+                    root,
                 )  # key=timestamp of fitted image (base cam), value=reprojected fitted mesh (dest cam)
+                if verbose:
+                    print(
+                        f"\t\t-> Meshes for {seq_name}: {len(timestamped_meshes.keys()) if timestamped_meshes is not None else 0}"
+                    )
                 if not keep_dirty:
-                    print(f"\t\t-> Deleting {humor_output_path}...")
+                    if verbose:
+                        print(f"\t\t-> Deleting {humor_output_path}...")
                     os.system(f"rm -rf {humor_output_path}")
                 if timestamped_meshes is None:
                     print(
@@ -152,39 +165,77 @@ def annotate_capture(
     return sequence_meshes
 
 
+def average_meshes(meshes: List[trimesh.Trimesh]) -> trimesh.Trimesh:
+    """
+    Averages a list of meshes by averaging their vertices.
+    Args:
+        meshes: A list of meshes to average.
+    Returns:
+        The averaged mesh.
+    """
+    vertices = np.array([mesh.vertices for mesh in meshes])
+    vertices = np.mean(vertices, axis=0)
+    # TODO: Rebuild the faces? How?
+    return trimesh.Trimesh(vertices=vertices, faces=meshes[0].faces)
+
+
 def synchronize_annotations(
     sub_sequences: List[Dict[int, trimesh.Trimesh]],
     synced_filenames_array: List[List[str]],
-    root: str,
-) -> Dict[int, trimesh.Trimesh]:
+    synced_camera_names: List[str],
+) -> List[Dict[str, Tuple[int, trimesh.Trimesh]]]:
     """
     We synchronize the annotations from the different sub-sequences of a capture.
     For this, we take the average of the meshes for each of the synced files in the array.
+    Args:
+        sub_sequences: A list of dictionaries, where each dictionary is a sub-sequence of a capture
+            with keys being the timestamps of the frames and values being the meshes for that frame.
+        synced_filenames_array: A list of lists of filenames, where each list of filenames contains
+            the filenames of the frames that are synced together from the available cameras.
+            Example: [kinect0_filename, kinect1_filename, omni_filename] or
+            [kinect0_filename, kinect1_filename, kinect2_filename, omni_filename].
+        synced_camera_names: A list of strings, where each string is the name of the camera that
+            corresponds to the synced filenames in the synced_filenames_array.
+            Example: ["kinect0", "kinect1", "omni"] or ["kinect0", "kinect1", "kinect2", "omni"].
+    Returns:
+        A list of dictionaries, where each dictionary is a synchronized frame with key=camera_name,
+        value=(timestamp, mesh).
     """
-    merged_sequence = {}
-    for synced_files in synced_filenames_array:
-        # Get the timestamp of the first file
-        first_file_timestamp = int(synced_files[0].split(".")[0])
-        # Get the meshes for each of the synced files
-        meshes = []
-        for synced_file in synced_files:
-            # Get the timestamp of the synced file
-            synced_file_timestamp = int(synced_file.split(".")[0])
-            # Get the mesh for the synced file
-            for sub_sequence in sub_sequences:
-                if synced_file_timestamp in sub_sequence:
-                    meshes.append(sub_sequence[synced_file_timestamp])
+    assert (
+        sum([len(sub_sequence) for sub_sequence in sub_sequences]) > 0
+    ), "No meshes to synchronize"
+    # Step 1, flatten the subsequences into a single dictionary where the keys are the ordered
+    # timestamps of the frames and the values are the meshes for that frame:
+    mesh_sequence = {}
+    for sub_sequence in sub_sequences:
+        for timestamp, mesh in sub_sequence.items():
+            # It is still possible that there are multiple meshes for a single timestamp, if more
+            # than one camera has a frame for that timestamp. In that case, we average the meshes
+            # once more.
+            if timestamp in mesh_sequence:
+                if isinstance(mesh_sequence[timestamp], list):
+                    mesh_sequence[timestamp].append(mesh)
+                else:
+                    mesh_sequence[timestamp] = [mesh_sequence[timestamp], mesh]
+            mesh_sequence[timestamp] = mesh
+    # Now go through them once more to average all the meshes that need to be averaged
+    for timestamp, mesh in mesh_sequence.items():
+        if isinstance(mesh, list):
+            mesh_sequence[timestamp] = average_meshes(mesh)
+    mesh_sequence = {timestamp: mesh_sequence[timestamp]  for timestamp in sorted(mesh_sequence.keys())}
 
-        # Get the points of the meshes and average them
-        points = []
-        for mesh in meshes:
-            points.append(mesh.vertices)
-        points = np.mean(points, axis=0)
-        # Create a new mesh with the averaged points
-        new_mesh = trimesh.Trimesh(vertices=points)
-        # Add the new mesh to the sub-sequences
-        merged_sequence[first_file_timestamp] = new_mesh
-
+    merged_sequence = []
+    for frame_sync_files in synced_filenames_array:
+        frame = {}
+        for i, frame_file in enumerate(frame_sync_files):
+            timestamp = int(frame_file.split(".")[0])
+            if timestamp in mesh_sequence:
+                frame[synced_camera_names[i]] = (timestamp, mesh_sequence[timestamp])
+        if frame != {}:
+            merged_sequence.append(frame)
+    num_annotated_frames = sum([len(frame) for frame in merged_sequence])
+    assert num_annotated_frames  > 0, "Resulting sequence is empty"
+    print(f"-> Merged sequence: {num_annotated_frames}/{len(synced_filenames_array)} frames annotated!")
     return merged_sequence
 
 
@@ -205,7 +256,7 @@ def get_calibration_files(root) -> Dict[str, str]:
 
 
 def annotate_participant(
-    root, humor_docker_script, current_room_calib, keep_dirty
+    root, humor_docker_script, current_room_calib, keep_dirty, verbose
 ) -> List[Dict[int, trimesh.Trimesh]]:
     """
     Returns a list of viewpoint annotations for each capture in the participant folder. The
@@ -223,13 +274,19 @@ def annotate_participant(
                 CAM_INTRINSICS_PATH[f"k{kinect_id}"],
                 current_room_calib[f"k{kinect_id}_rgb_cam_to_world"],
                 current_room_calib[f"k{kinect_id}_omni_world_to_cam"],
-                keep_dirty,
+                keep_dirty=keep_dirty,
+                verbose=verbose,
             )
             multi_view_sequence_annotations.append(sequence_meshes)
     return multi_view_sequence_annotations
 
 
-def main(dataset_path: str, humor_docker_script: str, keep_dirty: bool = False):
+def main(
+    dataset_path: str,
+    humor_docker_script: str,
+    keep_dirty: bool = False,
+    verbose: bool = False,
+):
     """
     Args:
         dataset_path (str): Path to the dataset to annotate.
@@ -274,30 +331,32 @@ def main(dataset_path: str, humor_docker_script: str, keep_dirty: bool = False):
         if "calib" in dirs:
             # Now we are in a room folder, so we can get the
             # extrinsics for the current room and annotate the sequences
-            print(f"[*] Processing sequences from {folder}")
+            print(f"=== Processing sequences from {folder} ===")
             current_room_calib = get_calibration_files(root)
             dirs.pop(dirs.index("calib"))
 
         elif "capture0" in dirs:
             # We're now in a participant sequence folder
-            print(f"\t[*] Processing participant '{folder}'")
+            print(f"[*] Processing participant '{folder}'")
             sequence_annotations = annotate_participant(
-                root, humor_docker_script, current_room_calib, keep_dirty
+                root, humor_docker_script, current_room_calib, keep_dirty, verbose
             )
             # os.walk is depth-first, so we should have all the sequence annotations
-            print("\t\t-> Merging sequences...")
+            print("[*] Merging sequences...")
             synced_filenames = []
             with open(os.path.join(root, SYNC_FILENAME), "r") as file:
                 for line in file:
                     synced_filenames.append(line.strip().split(";"))
+            synced_camera_names = synced_filenames[0]
             synced_filenames = synced_filenames[1:]
             final_seq_annotations = synchronize_annotations(
-                sequence_annotations, synced_filenames, root
+                sequence_annotations, synced_filenames, synced_camera_names
             )
-            print("\t\t-> Saving annotations...")
+            print(f"-> Saving annotations as {root}/pose_labels.pkl")
             with open(f"{root}/pose_labels.pkl", "wb") as file:
                 pickle.dump(final_seq_annotations, file)
             dirs.clear()
+            print("============================================")
 
 
 if __name__ == "__main__":
@@ -309,10 +368,16 @@ if __name__ == "__main__":
         required=True,
     )
     parser.add_argument(
-        "--keep-dirty",
-        help="Whether to not clean the temporary files created during the annotation"
-        + " (HuMoR stuff, etc.). This is useful for debugging and development.",
+        "--clean-up",
+        help="Whether to clean the temporary files created during the annotation"
+        + " (HuMoR stuff, etc.). This is to be used in production.",
         action="store_true",
     )
+    parser.add_argument("--verbose", "-v", help="Verbose mode.", action="store_true")
     args = parser.parse_args()
-    main(args.dataset_path, args.humor_script, keep_dirty=args.keep_dirty)
+    main(
+        args.dataset_path,
+        args.humor_script,
+        keep_dirty=not args.clean_up,
+        verbose=args.verbose,
+    )

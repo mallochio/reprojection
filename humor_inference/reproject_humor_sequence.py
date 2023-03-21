@@ -282,12 +282,18 @@ def export_timestamped_mesh_seq(
             if fname.endswith(".png") or fname.endswith(".jpg")
         ]
     )
+    assert len(timestamps) > 0, f"No images found in {images_dir}"
     if len(timestamps) > len(mesh_seq):
+        before_len = len(timestamps)
         timestamps = timestamps[: len(mesh_seq)]
-        print("Warning: more images than meshes, truncating images to match.")
-    else:
+        after_len = len(timestamps)
+        print(f"[!] Warning: more images than meshes, truncating images to match. ({before_len} -> {after_len})")
+    elif len(timestamps) < len(mesh_seq):
+        before_len = len(mesh_seq)
         mesh_seq = mesh_seq[: len(timestamps)]
-        print("Warning: more meshes than images, truncating meshes to match.")
+        after_len = len(mesh_seq)
+        print(f"[!] Warning: more meshes than images, truncating meshes to match. ({before_len} -> {after_len})")
+    assert len(timestamps) == len(mesh_seq)
     return {int(ts): mesh for ts, mesh in zip(timestamps, mesh_seq)}
 
 
