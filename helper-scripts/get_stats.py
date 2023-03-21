@@ -23,7 +23,6 @@ mpl.rcParams.update({
     "pgf.preamble": r"\usepackage{amsmath}"
 })
 import matplotlib.pyplot as plt
-# Set font to Times New Roman
 plt.switch_backend("pgf")
 
 def count_folders(path, level):
@@ -66,30 +65,9 @@ def make_dictionary_of_filecounts(path):
     return {"rgb": rgb_count, "ir": ir_count, "depth": depth_count, "omni": omni_count}
 
 
-def calculate_duration(folder_path):
-    # function to calculate the time difference between the first and last timestamps.
-    # All timestamps are in utc but need to be divided by 1000 to get the correct time
-
-    rgb_folder = os.path.join(folder_path, "rgb")
-    if not os.path.exists(rgb_folder):
-        return None
-    timestamps = []
-    for filename in os.listdir(rgb_folder):
-        if filename.endswith(".jpg"):
-            # timestamp_str = filename.split("_")[0]
-            timestamp = int(os.path.splitext(filename)[0]) // 1000
-            timestamp = datetime.datetime.fromtimestamp(timestamp) 
-            timestamps.append(timestamp)
-    if len(timestamps) < 2:
-        return None
-    duration = max(timestamps) - min(timestamps)
-    return duration.total_seconds() / 60.0
   
 def calculate_time_and_duration(folder_path):
-    # function to calculate the time of day and duration of each recording session
-    # based on the timestamps of the image files.
-    # All timestamps are in utc but need to be divided by 1000 to get the correct time.
-
+    # Calculate the duration of the recording in minutes and the median timestamp in hours
     rgb_folder = os.path.join(folder_path, "rgb")
     if not os.path.exists(rgb_folder):
         return None
@@ -104,29 +82,31 @@ def calculate_time_and_duration(folder_path):
         return None, None
     
     duration = max(timestamps) - min(timestamps)
-    
-    # Calculate the median timestamp and convert it to hours, and then into radians
-    median_timestamp = timestamps[len(timestamps) // 2]
-    theta = (median_timestamp.hour + median_timestamp.minute / 60.0) / 12.0 * np.pi
     duration = duration.total_seconds() / 60.0
-
-    return theta, duration
+    
+    # Calculate the median timestamp and convert it to hours, and then into radians for the polar plot
+    median_timestamp = timestamps[len(timestamps) // 2]
+    median_timestamp_hour = median_timestamp.hour
+    return median_timestamp_hour, duration
 
 
 def traverse_folder(folder_path):
     # recursively traverse the folder structure and calculate the duration of each recording when an rgb folder is found
     durations = []
-    thetas = []
+    hours = []
     for dirpath, dirs, files in os.walk(folder_path):
         if "rgb" in dirs and "calib" not in dirpath:
-            theta, duration = calculate_time_and_duration(dirpath)
-            if theta is not None:
-                thetas.append(theta)
+            hour, duration = calculate_time_and_duration(dirpath)
+            if hour is not None:
+                hours.append(hour)
             if duration is not None:
                 durations.append(duration)
     # remove the highest value from the durations list, it is an outlier
     durations.remove(max(durations))
-    return durations, thetas
+    # print(hours)
+    # radians = np.array(hours) * 2 * np.pi / 24
+    
+    return durations, hours
 
 def plot_histogram(durations):
     # Create a seaborn histogram plot of the durations with 50 bins
@@ -134,7 +114,7 @@ def plot_histogram(durations):
                  linewidth=1.2, alpha=0.8, kde=True)
     
     # Set plot title and axis labels
-    plt.title("Duration of RGB Image Capture")
+    # plt.title("Duration of recordings")
     plt.xlabel("Duration (minutes)")
     plt.ylabel("Frequency")
     
@@ -146,9 +126,38 @@ def plot_histogram(durations):
 
 
 
+def plot_polar(timestamps):
+    # Set up the polar plot figure
+    fig = plt.figure(figsize=(8, 8))
+    ax = fig.add_subplot(111, projection='polar')
+
+    # Set the bin edges for the histogram
+    bin_edges = np.linspace(0, 2*np.pi, 25)
+
+    # Compute the histogram of the timestamps
+    hist, _ = np.histogram(np.array(timestamps)/24*2*np.pi, bins=bin_edges)
+
+    # Set the labels for the hours of the day
+    hour_labels = ['00:00', '', '', '03:00', '', '', '06:00', '', '', '09:00', '', '', '12:00', '', '', '15:00', '', '', '18:00', '', '', '21:00', '', '']
+
+    # Plot the histogram with customized styling
+    ax.bar(bin_edges[:-1], hist, width=2*np.pi/24, align='edge', edgecolor='none', alpha=1.0, color='#87CEEB')
+    # ax.bar(bin_edges[:-1], hist, width=2*np.pi/24, align='edge', edgecolor='white', alpha=0.5, color='white', bottom=0.0, linewidth=0.5)
+    ax.set_facecolor('none')
+    ax.spines['polar'].set_visible(False)
+
+    ax.set_yticks([])
+    ax.set_xticks(np.linspace(0, 2*np.pi, 24, endpoint=False))
+    ax.set_xticklabels(hour_labels, fontweight='light', fontsize=10, color='#444444')
+    ax.set_theta_zero_location('N')
+    ax.set_theta_direction(-1)
+
+    # Set the title and show the plot
+    # ax.set_title('Recording Times', fontsize=16, pad=20)
+    plt.savefig("TOD2.pdf", bbox_inches="tight", facecolor="none")
+    # plt.show()
+
 def plot_TOD(theta):
-
-
     fig = plt.figure(figsize=(5,5))
     ax = fig.add_subplot(111, projection='polar')
     
@@ -177,6 +186,7 @@ def plot_TOD(theta):
     plt.savefig("TOD.pdf", bbox_inches="tight", facecolor="none")
 
 
+
 def traverse_and_plot(top_folder):
     # function to plot the durations
     durations, thetas = traverse_folder(top_folder)
@@ -184,18 +194,17 @@ def traverse_and_plot(top_folder):
     durations = [d for d in durations if d is not None]
     thetas = [t for t in thetas if t is not None]
     # Remove the longest duration from the data (an outlier)
-    max_duration = max(durations)
-    durations.remove(max_duration)
+    durations.remove(max(durations))
     plot_histogram(durations)
-    plot_TOD(thetas)
+    plot_polar(thetas)
 
 
-def main(path, level, get_dictionary, make_plots):
+def main(path, level, get_dictionary, plot):
     if level:
         pprint(count_folders(path, level))
     if get_dictionary:
         pprint(make_dictionary_of_filecounts(path))
-    if make_plots:
+    if plot:
         traverse_and_plot(path)
 
 
@@ -204,7 +213,7 @@ if __name__ == "__main__":
     parser.add_argument("path", type=str, help="Path to the directory tree")
     parser.add_argument("--level", type=int, default=0, help="Level of the directory tree to count folders at")
     parser.add_argument("--get_dictionary", action="store_true", default=False, help="Get a dictionary of the number of files in each folder")
-    parser.add_argument("--make_plots", action="store_true", default=False, help="Make plots of the durations of the recordings")
+    parser.add_argument("--plot", action="store_true", default=False, help="Make plots of the durations of the recordings")
     args = parser.parse_args()
-    main(args.path, args.level, args.get_dictionary, args.make_plots)
+    main(args.path, args.level, args.get_dictionary, args.plot)
     
