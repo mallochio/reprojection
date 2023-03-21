@@ -101,7 +101,9 @@ def save_subsequence(
     os.makedirs(subsequence_path, exist_ok=True)
     # Copy the frames of the sub-sequence to the output directory
     for frame_path in subsequence:
-        if not os.path.exists(frame_path):
+        if not os.path.exists(
+            os.path.join(subsequence_path, os.path.basename(frame_path))
+        ):
             os.symlink(
                 frame_path, os.path.join(subsequence_path, os.path.basename(frame_path))
             )
@@ -114,6 +116,8 @@ def main(
     iuvs_path: Optional[str] = None,
     threshold: float = 0.24,
     debug: bool = False,
+    skip_until_frame: Optional[str] = None,
+    min_frames_per_person: int = 30,
 ):
     """Preprocess a sequence.
 
@@ -122,12 +126,16 @@ def main(
         masks_path (str): Path to the masks of the sequence.
         output_path (str): Path to the output directory.
         threshold (float, optional): Threshold to consider a pixel as part of the subject. Defaults to 0.5.
+        skip_until_frame (str, optional): Skip all frames until this one. Defaults to None.
+        min_frames_per_person (int, optional): Minimum number of frames per person. Defaults to 30.
     """
-    MIN_FRAMES_FOR_PERSON = 30
     # Load all image absolute file paths in the sequence which follows this tree structure:
     # <sequence_path>/rgb/<frame_id>.jpg
     rgb_path = os.path.join(sequence_path, "rgb")
     rgb_files = sorted([os.path.join(rgb_path, f) for f in os.listdir(rgb_path)])
+    if skip_until_frame is not None:
+        rgb_files = rgb_files[rgb_files.index(os.path.join(rgb_path, skip_until_frame)) :]
+
     if not masks_path:
         masks_path = os.path.join(sequence_path, "rgb_dp2_mask")
     # Load all mask file names in the sequence which follows this tree structure:
@@ -202,7 +210,7 @@ def main(
         elif contains_person:
             # If the subject was only visible for less than MIN_FRAMES_FOR_PERSON though,
             # reject the sequence and consider the subject not visible.
-            contains_person = len(current_subsequence) >= MIN_FRAMES_FOR_PERSON
+            contains_person = len(current_subsequence) >= min_frames_per_person
             save_subsequence(
                 current_subsequence, subsequence_idx, contains_person, output_path
             )
@@ -213,7 +221,8 @@ def main(
         current_subsequence.append(rgb_file)
     # Save the last sub-sequence if there's one remaining
     if contains_person:
-        contains_person = len(current_subsequence) >= MIN_FRAMES_FOR_PERSON
+        contains_person = len(current_subsequence) >= min_frames_per_person
+    print("[*] Saving all sub-sequences...")
     save_subsequence(current_subsequence, subsequence_idx, contains_person, output_path)
 
 
@@ -243,7 +252,7 @@ if __name__ == "__main__":
         "--threshold",
         type=float,
         help="Minimum threshold for person visibility.",
-        default=0.24,
+        default=0.26,
     )
     parser.add_argument("--debug", action="store_true", help="Debug mode.")
     args = parser.parse_args()

@@ -12,8 +12,7 @@ sequence on the corresponding image sequence.
 import argparse
 import os
 import pickle
-from typing import List, Optional
-
+from typing import Dict, List, Optional
 import cv2 as cv
 import numpy as np
 import torch
@@ -182,6 +181,7 @@ SMPL_JOINTS = {
 
 SMPL_SIZES = {"trans": 3, "betas": 10, "pose_body": 63, "root_orient": 3}
 
+
 def c2c(tensor):
     return tensor.detach().cpu().numpy()
 
@@ -282,12 +282,18 @@ def export_timestamped_mesh_seq(
             if fname.endswith(".png") or fname.endswith(".jpg")
         ]
     )
+    assert len(timestamps) > 0, f"No images found in {images_dir}"
     if len(timestamps) > len(mesh_seq):
+        before_len = len(timestamps)
         timestamps = timestamps[: len(mesh_seq)]
-        print("Warning: more images than meshes, truncating images to match.")
-    else:
+        after_len = len(timestamps)
+        print(f"[!] Warning: more images than meshes, truncating images to match. ({before_len} -> {after_len})")
+    elif len(timestamps) < len(mesh_seq):
+        before_len = len(mesh_seq)
         mesh_seq = mesh_seq[: len(timestamps)]
-        print("Warning: more meshes than images, truncating meshes to match.")
+        after_len = len(mesh_seq)
+        print(f"[!] Warning: more meshes than images, truncating meshes to match. ({before_len} -> {after_len})")
+    assert len(timestamps) == len(mesh_seq)
     return {int(ts): mesh for ts, mesh in zip(timestamps, mesh_seq)}
 
 
@@ -393,7 +399,7 @@ def main(
     images_path: str,
     output_path: Optional[str] = None,
     cam1_calib_pth: Optional[str] = None,
-):
+) -> Optional[Dict[int, trimesh.Trimesh]]:
     with open(cam0_to_world_pth, "rb") as f:
         cam0_to_world = make_44(pickle.load(f))
     with open(world_to_cam1_pth, "rb") as f:
@@ -403,8 +409,11 @@ def main(
         torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
     )
 
-    results_dir = os.path.join(humor_output_path, "final_results")
-    pred_res = np.load(os.path.join(results_dir, "stage3_results.npz"))
+    results_dir = os.path.join(humor_output_path, "results_out", "final_results")
+    res_file = os.path.join(results_dir, "stage3_results.npz")
+    if not os.path.isfile(res_file):
+        return None
+    pred_res = np.load(res_file)
     T = pred_res["trans"].shape[0]
     sanitize_preds(pred_res, T)
     pred_res = prep_res(pred_res, device, T)
