@@ -12,7 +12,7 @@ guaranteed to contain a subject or not, from start to finish.
 
 import argparse
 import os
-from typing import List
+from typing import List, Optional
 
 import cv2
 import numpy as np
@@ -101,23 +101,24 @@ def save_subsequence(
     os.makedirs(subsequence_path, exist_ok=True)
     # Copy the frames of the sub-sequence to the output directory
     for frame_path in subsequence:
-        os.symlink(
-            frame_path, os.path.join(subsequence_path, os.path.basename(frame_path))
-        )
+        if not os.path.exists(frame_path):
+            os.symlink(
+                frame_path, os.path.join(subsequence_path, os.path.basename(frame_path))
+            )
 
 
 def main(
     sequence_path: str,
-    masks_path: str,
-    iuvs_path: str,
     output_path: str,
-    threshold: float = 0.5,
+    masks_path: Optional[str] = None,
+    iuvs_path: Optional[str] = None,
+    threshold: float = 0.24,
     debug: bool = False,
 ):
     """Preprocess a sequence.
 
     Args:
-        sequence_path (str): Path to the sequence to preprocess.
+        sequence_path (str): Path to the sequence to preprocess (root containing the 'rgb' folder).
         masks_path (str): Path to the masks of the sequence.
         output_path (str): Path to the output directory.
         threshold (float, optional): Threshold to consider a pixel as part of the subject. Defaults to 0.5.
@@ -246,4 +247,11 @@ if __name__ == "__main__":
     )
     parser.add_argument("--debug", action="store_true", help="Debug mode.")
     args = parser.parse_args()
-    main(args.sequence, args.masks, args.iuvs, args.output, args.threshold, args.debug)
+    main(
+        args.sequence,
+        args.output,
+        masks_path=args.masks,
+        iuvs_path=args.iuvs,
+        threshold=args.threshold,
+        debug=args.debug,
+    )

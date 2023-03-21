@@ -12,7 +12,7 @@ sequence on the corresponding image sequence.
 import argparse
 import os
 import pickle
-from typing import List
+from typing import List, Optional
 
 import cv2 as cv
 import numpy as np
@@ -182,7 +182,8 @@ SMPL_JOINTS = {
 
 SMPL_SIZES = {"trans": 3, "betas": 10, "pose_body": 63, "root_orient": 3}
 
-c2c = lambda tensor: tensor.detach().cpu().numpy()
+def c2c(tensor):
+    return tensor.detach().cpu().numpy()
 
 
 def prep_res(np_res, device, T):
@@ -267,6 +268,27 @@ def make_44(pose):
 
 
 J_BODY = len(SMPL_JOINTS) - 1  # no root
+
+
+def export_timestamped_mesh_seq(
+    images_dir: str,
+    mesh_seq: List[trimesh.Trimesh],
+):
+    # Load all images in the directory
+    timestamps = sorted(
+        [
+            fname.split(".")[0]
+            for fname in os.listdir(images_dir)
+            if fname.endswith(".png") or fname.endswith(".jpg")
+        ]
+    )
+    if len(timestamps) > len(mesh_seq):
+        timestamps = timestamps[: len(mesh_seq)]
+        print("Warning: more images than meshes, truncating images to match.")
+    else:
+        mesh_seq = mesh_seq[: len(timestamps)]
+        print("Warning: more meshes than images, truncating meshes to match.")
+    return {int(ts): mesh for ts, mesh in zip(timestamps, mesh_seq)}
 
 
 def render_on_images(
@@ -367,18 +389,15 @@ def sanitize_preds(pred_res, T):
 def main(
     cam0_to_world_pth: str,
     world_to_cam1_pth: str,
-    cam1_calib_pth: str,
-    images_path: str,
     humor_output_path: str,
-    output_path: str,
+    images_path: str,
+    output_path: Optional[str] = None,
+    cam1_calib_pth: Optional[str] = None,
 ):
-    os.makedirs(output_path, exist_ok=True)
     with open(cam0_to_world_pth, "rb") as f:
         cam0_to_world = make_44(pickle.load(f))
     with open(world_to_cam1_pth, "rb") as f:
         world_to_cam1 = make_44(pickle.load(f))
-    with open(cam1_calib_pth, "rb") as f:
-        cam1_calib = pickle.load(f)
 
     device = (
         torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
@@ -416,57 +435,66 @@ def main(
 
     transform = world_to_cam1 @ cam0_to_world
     transform[:3, 3] = transform[:3, 3] / 1000.0
+
     print("[*] Applying the transform to the SMPL models sequence...")
     transformed_meshes = transform_SMPL_sequence(pred_body, transform)
+
+    if cam1_calib_pth is None:
+        # Return a dictionary of the transformed meshes where the keys are the matching image names (timestamps)
+        return export_timestamped_mesh_seq(images_path, transformed_meshes)
+    with open(cam1_calib_pth, "rb") as f:
+        cam1_calib = pickle.load(f)
+    output_path = output_path if output_path is not None else "projected_output_viz"
+    os.makedirs(output_path, exist_ok=True)
     render_on_images(images_path, transformed_meshes, cam1_calib, output_path)
 
 
-parser = argparse.ArgumentParser()
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
 
-parser.add_argument(
-    "humor_results_dir",
-    type=str,
-    help="Path to the directory containing the humor results.",
-)
-parser.add_argument(
-    "images_dir",
-    type=str,
-    help="Path to the images directory from fitting to run viz on.",
-)
-parser.add_argument(
-    "--output_dir",
-    type=str,
-    required=False,
-    default="transformed_output",
-    help="Path to save visualizations to.",
-)
-parser.add_argument(
-    "--cam0-to-world",
-    type=str,
-    dest="cam0_to_world",
-    help="Pickle file of [R|t] matrix from camera 0 to world coordinates.",
-    required=True,
-)
-parser.add_argument(
-    "--world-to-cam1",
-    type=str,
-    dest="world_to_cam1",
-    help="Pickle file of [R|t] matrix from world to camera 1 coordinates.",
-    required=True,
-)
-parser.add_argument(
-    "--cam1-calib",
-    type=str,
-    dest="cam1_calib",
-    help="Pickle file of camera 1 calibration (intrinsics, distortion, etc.).",
-    required=True,
-)
-args = parser.parse_args()
-main(
-    args.cam0_to_world,
-    args.world_to_cam1,
-    args.cam1_calib,
-    args.images_dir,
-    args.humor_results_dir,
-    args.output_dir,
-)
+    parser.add_argument(
+        "humor_results_dir",
+        type=str,
+        help="Path to the directory containing the humor results.",
+    )
+    parser.add_argument(
+        "images_dir",
+        type=str,
+        help="Path to the images directory from fitting.",
+    )
+    parser.add_argument(
+        "output_dir",
+        type=str,
+        default="transformed_output",
+        help="Path to save visualizations to. If not set, won't visualize.",
+    )
+    parser.add_argument(
+        "--cam0-to-world",
+        type=str,
+        dest="cam0_to_world",
+        help="Pickle file of [R|t] matrix from camera 0 to world coordinates.",
+        required=True,
+    )
+    parser.add_argument(
+        "--world-to-cam1",
+        type=str,
+        dest="world_to_cam1",
+        help="Pickle file of [R|t] matrix from world to camera 1 coordinates.",
+        required=True,
+    )
+    parser.add_argument(
+        "--cam1-calib",
+        type=str,
+        dest="cam1_calib",
+        help="Pickle file of camera 1 calibration (intrinsics, distortion, etc.). If not set, won't visualize",
+        required=False,
+    )
+    args = parser.parse_args()
+    main(
+        args.cam0_to_world,
+        args.world_to_cam1,
+        args.humor_results_dir,
+        args.images_dir,
+        output_path=args.output_dir,
+        cam1_calib_pth=args.cam1_calib,
+    )
