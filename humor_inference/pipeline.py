@@ -223,7 +223,7 @@ def synchronize_annotations(
         if isinstance(mesh, list):
             mesh_sequence[timestamp] = average_meshes(mesh)
     mesh_sequence = {timestamp: mesh_sequence[timestamp]  for timestamp in sorted(mesh_sequence.keys())}
-
+    # Step 2, pick the meshes that correspond to the synced frames and build the final sequence
     merged_sequence = []
     for frame_sync_files in synced_filenames_array:
         frame = {}
@@ -326,7 +326,7 @@ def main(
 
     sequence_annotations = []
     current_room_calib = {}
-    for root, dirs, files in os.walk(dataset_path):
+    for root, dirs, _ in os.walk(dataset_path):
         folder = os.path.basename(root)
         if "calib" in dirs:
             # Now we are in a room folder, so we can get the
