@@ -21,6 +21,7 @@ from typing import Dict, List, Tuple
 from reproject_humor_sequence import main as reproject
 from preprocess import main as preprocess
 
+# TODO: Move to a config file
 RGB_FOLDER = "rgb"
 IR_FOLDER = "ir"
 DEPTH_FOLDER = "depth"
