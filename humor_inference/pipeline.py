@@ -248,11 +248,10 @@ def get_calibration_files(root) -> Dict[str, str]:
     calib_folder = os.path.join(root, "calib")
     for calib_root, _, calib_files in os.walk(calib_folder):
         for fpath in calib_files:
-            if fpath.endswith(".pkl"):
+            if os.path.basename(calib_root).startswith("k") and fpath.endswith(".pkl"):
                 current_room_calib[
-                    os.path.basename(fpath).split(".")[0]
+                    f"{os.path.basename(calib_root)}_{os.path.basename(fpath).split('.')[0]}"
                 ] = f"{calib_root}/{fpath}"
-
     return current_room_calib
 
 
@@ -273,8 +272,8 @@ def annotate_participant(
                 capture_root,
                 humor_docker_script,
                 CAM_INTRINSICS_PATH[f"k{kinect_id}"],
-                current_room_calib[f"k{kinect_id}_rgb_cam_to_world"],
-                current_room_calib[f"k{kinect_id}_omni_world_to_cam"],
+                current_room_calib[f"k{kinect_id}-omni_k{kinect_id}_cam_to_world"],
+                current_room_calib[f"k{kinect_id}-omni_omni_world_to_cam"],
                 keep_dirty=keep_dirty,
                 verbose=verbose,
             )
@@ -299,14 +298,20 @@ def main(
                 room/
                     calib/
                         k0-omni/
-                            extrinsics.pkl
+                            k0_cam_to_world.pkl
+                            k0_world_to_cam.pkl
+                            omni_cam_to_world.pkl
+                            omni_world_to_cam.pkl
                             capture0/
                                 extrinsics.pkl
                             capture1
                             ...
                             omni
                         k1-omni/
-                            extrinsics.pkl
+                            k1_cam_to_world.pkl
+                            k1_world_to_cam.pkl
+                            omni_cam_to_world.pkl
+                            omni_world_to_cam.pkl
                             ...
                         ...
                     participant/

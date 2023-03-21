@@ -2,3 +2,5 @@
 out/
 checkpoints/
 checkpoints
+body_models/
+body_models
