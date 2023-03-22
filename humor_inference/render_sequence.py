@@ -15,7 +15,7 @@ import os
 import pickle
 import cv2 as cv
 from typing import List, Tuple
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageOps
 from tqdm import tqdm
 
 import numpy as np
@@ -64,31 +64,43 @@ def render_on_images(
         # Project the vertices on the image
         # We've already transformed the vertices to the camera frame, so we can just
         # project them on the image without any transformation.
-        if use_omni:
-            vertices_2d, _ = cv.omnidir.projectPoints(
-                np.expand_dims(mesh.vertices, axis=0),
-                np.zeros(3),
-                np.zeros(3),
-                camera_matrix,
-                xi,
-                dist_coeffs,
-            )
-            vertices_2d = np.swapaxes(vertices_2d, 0, 1)
+        if not isinstance(mesh, list):
+            meshlist = [mesh]
         else:
-            vertices_2d, _ = cv.projectPoints(
-                mesh.vertices, np.zeros(3), np.zeros(3), camera_matrix, dist_coeffs
-            )
-        # Draw the mesh on the image
-        draw = ImageDraw.Draw(img)
-        for face in mesh.faces:
-            face_vertices = vertices_2d[face]
-            points = [max(min(tuple(p[0]), img.size), (0, 0)) for p in face_vertices]
-            draw.polygon(
-                points,
-                fill=None,
-                outline="gray",
-                width=1,
-            )
+            print("Rendering multiple meshes")
+            meshlist = mesh
+        colours = ["gray", "red", "green", "blue", "yellow", "orange", "purple"]
+        for i, mesh in enumerate(meshlist):
+            if use_omni:
+                vertices_2d, _ = cv.omnidir.projectPoints(
+                    np.expand_dims(mesh.vertices, axis=0),
+                    np.zeros(3),
+                    np.zeros(3),
+                    camera_matrix,
+                    xi,
+                    dist_coeffs,
+                )
+                vertices_2d = np.swapaxes(vertices_2d, 0, 1)
+            else:
+                vertices_2d, _ = cv.projectPoints(
+                    mesh.vertices, np.zeros(3), np.zeros(3), camera_matrix, dist_coeffs
+                )
+            # Draw the mesh on the image
+            img = ImageOps.mirror(img) # TODO: Why is this needed? Our extrinsics are wrong?
+            draw = ImageDraw.Draw(img)
+            for face in mesh.faces:
+                # Numpy version:
+                # face_vertices = np.clip(vertices_2d[face], 0, img.size)
+                # points = [tuple(p[0]) for p in face_vertices]
+                # Faster version (don't ask me):
+                face_vertices = vertices_2d[face]
+                points = [max(min(tuple(p[0]), img.size), (0, 0)) for p in face_vertices]
+                draw.polygon(
+                    points,
+                    fill=None,
+                    outline=colours[i],
+                    width=1,
+                )
         # Save the image
         img.save(os.path.join(output_dir, f"{timestamp:08d}.png"))
     print("[*] Done!")

@@ -17,7 +17,7 @@ import cv2 as cv
 import numpy as np
 import torch
 import trimesh
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageOps
 from smplx import SMPL, SMPLH, SMPLX
 from smplx.utils import Struct
 from smplx.vertex_ids import vertex_ids
@@ -354,6 +354,8 @@ def render_on_images(
                 mesh.vertices, np.zeros(3), np.zeros(3), camera_matrix, dist_coeffs
             )
         # Draw the mesh on the image
+        img = ImageOps.mirror(img)
+        # img = ImageOps.flip(img)
         draw = ImageDraw.Draw(img)
         for face in mesh.faces:
             face_vertices = vertices_2d[face]
