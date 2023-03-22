@@ -163,6 +163,9 @@ def annotate_capture(
                     )
                 else:
                     sequence_meshes[timestamp] = mesh
+    assert len(sequence_meshes.keys()) == len(
+        set(sequence_meshes.keys())
+    ), "Duplicate timestamps in sequence_meshes!"
     return sequence_meshes
 
 
@@ -185,6 +188,8 @@ def synchronize_annotations(
     synced_filenames_array: List[List[str]],
     synced_camera_names: List[str],
 ) -> List[Dict[str, Tuple[int, trimesh.Trimesh]]]:
+    # TODO: Right now, the meshes are ALL in top-view frame! We wanna change that so we have them
+    # for all the cameras.
     """
     We synchronize the annotations from the different sub-sequences of a capture.
     For this, we take the average of the meshes for each of the synced files in the array.
@@ -222,21 +227,53 @@ def synchronize_annotations(
     # Now go through them once more to average all the meshes that need to be averaged
     for timestamp, mesh in mesh_sequence.items():
         if isinstance(mesh, list):
-            mesh_sequence[timestamp] = average_meshes(mesh)
-    mesh_sequence = {timestamp: mesh_sequence[timestamp]  for timestamp in sorted(mesh_sequence.keys())}
+            mesh_sequence[timestamp] = mesh #average_meshes(mesh)
+    mesh_sequence = {
+        timestamp: mesh_sequence[timestamp]
+        for timestamp in sorted(mesh_sequence.keys())
+    }
     # Step 2, pick the meshes that correspond to the synced frames and build the final sequence
     merged_sequence = []
     for frame_sync_files in synced_filenames_array:
-        frame = {}
-        for i, frame_file in enumerate(frame_sync_files):
-            timestamp = int(frame_file.split(".")[0])
-            if timestamp in mesh_sequence:
-                frame[synced_camera_names[i]] = (timestamp, mesh_sequence[timestamp])
-        if frame != {}:
-            merged_sequence.append(frame)
+        omni_ts = int(frame_sync_files[-1].split(".")[0])
+        # 1. Find the frame in mesh_sequence that matches one of the 3 timestamps in
+        # frame_sync_files. If none, continue
+        match = {}
+        for ts, mesh in mesh_sequence.items():
+            if any([f"{ts}.jpg" in frame_sync_file for frame_sync_file in frame_sync_files]):
+                # What's happening here? We are going through each synchronized set of frames
+                # (what's the sync strategy here?) and we are looking for the mesh in the
+                # annotation sequence that matches one of the timestamps in the synchronized
+                # frame set. Why would there be more than one match?
+                # It turns out that we can have, for instance, 2 frames from kinect1 that are
+                # in mesh_sequence, but only one of them is in the synchronized frame set so
+                # that's a match. However, it's possible (and it happens) that we have the
+                # other of the 2 frames from kinect1 in mesh_sequence that matches the omni
+                # timestamp in the same synchronized frame set. In that case, we have 2
+                # matches. We should pick the one that is closest to the omni timestamp.
+                match[ts] = mesh
+        if match == {}:
+            continue
+        # 2. Find the match closest in time to the omni in the frame
+        match = min(match.items(), key=lambda x: abs(x[0] - omni_ts))
+        # 2. Rename that frame to frame_sync_files[-1] (the omni frame) and add it to the merged
+        # sequence
+        merged_sequence.append({"omni": (omni_ts, match[1])})
+        print(omni_ts, match)
+
+    # for frame_sync_files in synced_filenames_array:
+        # frame = {}
+        # for i, frame_file in enumerate(frame_sync_files):
+            # timestamp = int(frame_file.split(".")[0])
+            # if timestamp in mesh_sequence:
+                # frame[synced_camera_names[i]] = (timestamp, mesh_sequence[timestamp])
+        # if frame != {}:
+            # merged_sequence.append(frame)
     num_annotated_frames = sum([len(frame) for frame in merged_sequence])
-    assert num_annotated_frames  > 0, "Resulting sequence is empty"
-    print(f"-> Merged sequence: {num_annotated_frames}/{len(synced_filenames_array)} frames annotated!")
+    assert num_annotated_frames > 0, "Resulting sequence is empty"
+    print(
+        f"-> Merged sequence: {num_annotated_frames}/{len(synced_filenames_array)} frames annotated!"
+    )
     return merged_sequence
 
 
@@ -264,7 +301,11 @@ def annotate_participant(
     reprojected mesh as the value.
     """
     multi_view_sequence_annotations = []
-    for capture_root, _, _ in os.walk(root):
+    for capture_root, dirs, _ in os.walk(root):
+        if os.path.basename(capture_root) == "rendered":
+            # This is the rendering folder, we skip it
+            dirs.clear()
+            continue
         capture_name = os.path.basename(capture_root)
         if capture_name.startswith("capture"):
             kinect_id = capture_name.split("capture")[1]
@@ -340,8 +381,8 @@ def main(
             print(f"=== Processing sequences from {folder} ===")
             current_room_calib = get_calibration_files(root)
             dirs.pop(dirs.index("calib"))
-
-        elif "capture0" in dirs:
+            continue
+        if "capture0" in dirs:
             # We're now in a participant sequence folder
             print(f"[*] Processing participant '{folder}'")
             sequence_annotations = annotate_participant(
