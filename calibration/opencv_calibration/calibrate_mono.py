@@ -22,10 +22,11 @@ model can also be easily interpreted in terms of the optical quality of the sens
 import argparse
 import os
 import pickle
-from typing import Tuple
+from typing import Optional, Tuple
 
 import cv2 as cv
 import numpy as np
+import random
 
 
 def calibrate_cam(
@@ -34,6 +35,7 @@ def calibrate_cam(
     square_width_mm: float,
     fish_eye: bool,
     verbose: bool,
+    max_files: Optional[int] = None,
 ):
     if not os.path.exists(files_path):
         raise ValueError(f"Path {files_path} does not exist")
@@ -62,7 +64,11 @@ def calibrate_cam(
     idx = None
 
     print("[*] Finding corners...")
-    for file_name in os.listdir(files_path):
+    files = os.listdir(files_path)
+    if max_files is not None:
+        files = random.sample(files, max_files)
+
+    for file_name in files:
         file = os.path.join(files_path, file_name)
         if os.path.isfile(file):
             img = cv.cvtColor(cv.imread(file), cv.COLOR_BGR2GRAY)
@@ -190,7 +196,8 @@ if __name__ == "__main__":
         action="store_true",
     )
     parser.add_argument("-v", "--verbose", action="store_true", dest="verbose")
+    parser.add_argument("--max-files", type=int, default=None, required=False)
     args = parser.parse_args()
     calibrate_cam(
-        args.root, args.grid_size, args.square_width, args.fisheye, args.verbose
+        args.root, args.grid_size, args.square_width, args.fisheye, args.verbose, args.max_files
     )
