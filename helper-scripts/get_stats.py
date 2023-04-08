@@ -125,7 +125,6 @@ def plot_histogram(durations):
     plt.savefig("myplot.pdf", bbox_inches="tight", facecolor="none")
 
 
-
 def plot_polar(timestamps):
     # Set up the polar plot figure
     fig = plt.figure(figsize=(8, 8))
@@ -148,43 +147,14 @@ def plot_polar(timestamps):
 
     ax.set_yticks([])
     ax.set_xticks(np.linspace(0, 2*np.pi, 24, endpoint=False))
-    ax.set_xticklabels(hour_labels, fontweight='light', fontsize=10, color='#444444')
+    ax.set_xticklabels(hour_labels, fontweight='semibold', fontsize=10, color='#444444')
     ax.set_theta_zero_location('N')
     ax.set_theta_direction(-1)
 
     # Set the title and show the plot
     # ax.set_title('Recording Times', fontsize=16, pad=20)
-    plt.savefig("TOD2.pdf", bbox_inches="tight", facecolor="none")
-    # plt.show()
-
-def plot_TOD(theta):
-    fig = plt.figure(figsize=(5,5))
-    ax = fig.add_subplot(111, projection='polar')
-    
-    # Set the theta values to start at 12 o'clock and go clockwise
-    ax.set_theta_zero_location("N")
-    ax.set_theta_direction(-1)
-    
-    # Plot the theta values as a histogram
-    sns.histplot(theta, bins=24, color='skyblue', edgecolor='white',
-                 linewidth=1.2, alpha=0.8, ax=ax)
-    
-    # Set the xticks and labels to resemble a clock
-    hours = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
-    ax.set_xticks([h/12*2*np.pi - np.pi/2 for h in hours])
-    ax.set_xticklabels([f"{h:d}" for h in hours])
-    ax.tick_params(pad=8)
-    ax.tick_params(axis='x', colors='black', labelsize=14)
-    
-    # Set plot title and axis labels
-    plt.title("Recording Times", fontsize=16)
-    
-    # Remove top and right spines from the plot
-    ax.spines['polar'].set_visible(False)
-    ax.set_rticks([])
-    
     plt.savefig("TOD.pdf", bbox_inches="tight", facecolor="none")
-
+    # plt.show()
 
 
 def traverse_and_plot(top_folder):

@@ -21,6 +21,7 @@ ms_frame = (1000./30.)  # 2*Hz of recording.
 # Load the configuration file, where the working directory is set.
 config = conf.load_config()
 work_dir = config['base_dir']
+work_dir = "/home/Dataset/kinect-omni-ego/2023-02-09/at-unis/lab/a10"
 
 # Find Kinect captures (capture0, capture1, etc.)
 folders = next(os.walk(work_dir))[1]

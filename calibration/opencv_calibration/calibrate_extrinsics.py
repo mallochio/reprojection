@@ -13,11 +13,11 @@ config = conf.load_config()
 script_path = "/home/sid/Projects/OmniScience/code/reprojection/calibration/opencv_calibration/get_cam_pose.py"
 
 if __name__ == "__main__":
-    base_dir = Path("/home/sid/Projects/OmniScience/dataset")
+    base_dir = Path("/home/Dataset/kinect-omni-ego/2023-02-09/at-unis/lab/calib/for-now")
     subdir = list(base_dir.glob('**'))
     # Get all subdirectories named "rgb", "ir", and "omni" from the base directory
     calib_rgb_dirs = [x for x in subdir if (x.name == "rgb" and "/calib/" in str(x))]
-    calib_ir_dirs = [x for x in subdir if x.name == "ir" and "/calib/" in str(x)]
+    # calib_ir_dirs = [x for x in subdir if x.name == "ir" and "/calib/" in str(x)]
     calib_omni_dirs = [x for x in subdir if x.name == "omni" and "/calib/" in str(x)]
     calib_dirs = calib_ir_dirs + calib_rgb_dirs + calib_omni_dirs
 
