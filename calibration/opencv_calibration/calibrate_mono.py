@@ -22,10 +22,11 @@ model can also be easily interpreted in terms of the optical quality of the sens
 import argparse
 import os
 import pickle
-from typing import Tuple
+from typing import Optional, Tuple
 
 import cv2 as cv
 import numpy as np
+import random
 
 
 def calibrate_cam(
@@ -34,6 +35,7 @@ def calibrate_cam(
     square_width_mm: float,
     fish_eye: bool,
     verbose: bool,
+    max_files: Optional[int] = None,
 ):
     if not os.path.exists(files_path):
         raise ValueError(f"Path {files_path} does not exist")
@@ -46,10 +48,9 @@ def calibrate_cam(
     # termination criteria
     criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 200, 1e-6)
     fisheye_calibration_flags = (
-        None
-        # cv.fisheye.CALIB_RECOMPUTE_EXTRINSIC
-        # + cv.fisheye.CALIB_CHECK_COND
-        # + cv.fisheye.CALIB_FIX_SKEW
+        cv.omnidir.CALIB_FIX_SKEW
+        + cv.omnidir.CALIB_USE_GUESS
+        + cv.omnidir.CALIB_FIX_CENTER
     )
     # prepare object points, like (0,0,0), (1,0,0), (2,0,0) ....,(6,5,0)
     objp = np.zeros((1, grid_size[0] * grid_size[1], 3), np.float32)
@@ -62,7 +63,11 @@ def calibrate_cam(
     idx = None
 
     print("[*] Finding corners...")
-    for file_name in os.listdir(files_path):
+    files = os.listdir(files_path)
+    if max_files is not None:
+        files = random.sample(files, max_files)
+
+    for file_name in files:
         file = os.path.join(files_path, file_name)
         if os.path.isfile(file):
             img = cv.cvtColor(cv.imread(file), cv.COLOR_BGR2GRAY)
@@ -85,9 +90,10 @@ def calibrate_cam(
         f"[*] Found {len(objpoints)} valid frames! Calibrating for a {img_shape[0]}x{img_shape[1]} resolution..."
     )
     xi = None
+    rms = None
     if fish_eye:
         (
-            ret,
+            rms,
             cam_mat,
             xi,
             dist_coeffs,
@@ -98,13 +104,13 @@ def calibrate_cam(
             objpoints,
             imgpoints,
             img_shape[::-1],
-            None,
-            None,
-            None,
-            None,
+            K=None,
+            xi=None,
+            D=None,
+            flags=0,#fisheye_calibration_flags,
             criteria=(
                 cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER,
-                200,
+                1000,
                 1e-6,
             ),
         )
@@ -138,6 +144,7 @@ def calibrate_cam(
     mean_error = 0
     if fish_eye:
         assert idx is not None
+        print(f"-> RMS: {rms:.2f}px")
         idx = idx.squeeze()
         used = 0
         for i in range(len(idx)):
@@ -145,18 +152,13 @@ def calibrate_cam(
                 used += 1
                 xi = xi.item() if isinstance(xi, np.ndarray) else xi
                 imgpoints2, _ = cv.omnidir.projectPoints(
-                    objpoints[i],
-                    rotation_vec[i],
-                    translation_vec[i],
-                    cam_mat,
-                    xi,
-                    dist_coeffs,
+                    objpoints[idx[i]], rotation_vec[i], translation_vec[i], cam_mat, xi, dist_coeffs
                 )
-                imgpoints2 = np.swapaxes(imgpoints2, 0, 1)
-                error = cv.norm(imgpoints[i], imgpoints2, cv.NORM_L2) / len(imgpoints2)
+                imgpoints2 = imgpoints2.swapaxes(0, 1)
+                error = cv.norm(imgpoints[idx[i]], imgpoints2, cv.NORM_L2) / len(imgpoints2)
                 mean_error += error
-        print(f"-> Used {used}/{len(objpoints)} frames for calibration.")
         print(f"-> Total error: {mean_error/used:.2f}px")
+        print(f"-> Used {used}/{len(objpoints)} frames for calibration.")
     else:
         for i in range(len(objpoints)):
             imgpoints2, _ = cv.projectPoints(
@@ -190,7 +192,8 @@ if __name__ == "__main__":
         action="store_true",
     )
     parser.add_argument("-v", "--verbose", action="store_true", dest="verbose")
+    parser.add_argument("--max-files", type=int, default=None, required=False)
     args = parser.parse_args()
     calibrate_cam(
-        args.root, args.grid_size, args.square_width, args.fisheye, args.verbose
+        args.root, args.grid_size, args.square_width, args.fisheye, args.verbose, args.max_files
     )

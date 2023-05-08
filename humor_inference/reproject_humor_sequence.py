@@ -17,7 +17,7 @@ import cv2 as cv
 import numpy as np
 import torch
 import trimesh
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageOps
 from smplx import SMPL, SMPLH, SMPLX
 from smplx.utils import Struct
 from smplx.vertex_ids import vertex_ids
@@ -354,6 +354,8 @@ def render_on_images(
                 mesh.vertices, np.zeros(3), np.zeros(3), camera_matrix, dist_coeffs
             )
         # Draw the mesh on the image
+        img = ImageOps.mirror(img)
+        # img = ImageOps.flip(img)
         draw = ImageDraw.Draw(img)
         for face in mesh.faces:
             face_vertices = vertices_2d[face]
@@ -396,7 +398,7 @@ def main(
     cam0_to_world_pth: str,
     world_to_cam1_pth: str,
     humor_output_path: str,
-    images_path: str,
+    cam1_images_path: str,
     output_path: Optional[str] = None,
     cam1_calib_pth: Optional[str] = None,
 ) -> Optional[Dict[int, trimesh.Trimesh]]:
@@ -412,6 +414,7 @@ def main(
     results_dir = os.path.join(humor_output_path, "results_out", "final_results")
     res_file = os.path.join(results_dir, "stage3_results.npz")
     if not os.path.isfile(res_file):
+        print(f"Could not find {res_file}!")
         return None
     pred_res = np.load(res_file)
     T = pred_res["trans"].shape[0]
@@ -450,12 +453,12 @@ def main(
 
     if cam1_calib_pth is None:
         # Return a dictionary of the transformed meshes where the keys are the matching image names (timestamps)
-        return export_timestamped_mesh_seq(images_path, transformed_meshes)
+        return export_timestamped_mesh_seq(cam1_images_path, transformed_meshes)
     with open(cam1_calib_pth, "rb") as f:
         cam1_calib = pickle.load(f)
     output_path = output_path if output_path is not None else "projected_output_viz"
     os.makedirs(output_path, exist_ok=True)
-    render_on_images(images_path, transformed_meshes, cam1_calib, output_path)
+    render_on_images(cam1_images_path, transformed_meshes, cam1_calib, output_path)
 
 
 if __name__ == "__main__":
@@ -467,9 +470,9 @@ if __name__ == "__main__":
         help="Path to the directory containing the humor results.",
     )
     parser.add_argument(
-        "images_dir",
+        "cam1_images_dir",
         type=str,
-        help="Path to the images directory from fitting.",
+        help="Path to cam1 images directory for rendering.",
     )
     parser.add_argument(
         "output_dir",
@@ -503,7 +506,7 @@ if __name__ == "__main__":
         args.cam0_to_world,
         args.world_to_cam1,
         args.humor_results_dir,
-        args.images_dir,
+        args.cam1_images_dir,
         output_path=args.output_dir,
         cam1_calib_pth=args.cam1_calib,
     )
