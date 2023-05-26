@@ -1,5 +1,5 @@
 {
-   "base_dir": "/home/Dataset/2022-10-06/bedroom/sid/round1",
+   "base_dir": "/media/carlo/Seagate Expansion Drive/Dataset/session-recordings/kinect-omni-ego/2022-09-22/at-paus/living-room/sid",
    
    "omni_params": "/home/reprojection/calibration/intrinsics/omni_calib.pkl",
    "stereo_params_k0": "/home/reprojection/calibration/intrinsics/k0_rgb_to_depth.pkl",
