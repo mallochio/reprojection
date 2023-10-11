@@ -12,6 +12,8 @@ import cv2
 from tqdm import tqdm
 
 sys.path.insert(0,'/home/appuser/detectron2_repo/projects/DensePose')
+print(sys.version)
+print(sys.executable)
 
 from detectron2.config import get_cfg
 from detectron2.data.detection_utils import read_image

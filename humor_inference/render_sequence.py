@@ -15,18 +15,20 @@ import os
 import pickle
 import cv2 as cv
 from typing import List, Tuple
-from PIL import Image, ImageDraw, ImageOps
+from PIL import Image, ImageDraw, ImageOps, ImageFile
+
 from tqdm import tqdm
 
 import numpy as np
 import trimesh
 
-# TODO: Move to a config file
+ImageFile.LOAD_TRUNCATED_IMAGES = True
+
 ANNOTATION_FILENAME = "pose_labels.pkl"
 CAM_INTRINSICS_PATH = {
-    "capture0": "../calibration/intrinsics/k0_rgb_calib.pkl",
-    "capture1": "../calibration/intrinsics/k1_rgb_calib.pkl",
-    "omni": "../calibration/intrinsics/omni_calib.pkl",
+    "capture0": "../calibration/intrinsics/k0_rgb_intrinsics_new.pkl",
+    "capture1": "../calibration/intrinsics/k1_rgb_intrinsics_new.pkl",
+    "omni": "../calibration/intrinsics/omni_intrinsics_new.pkl",
 }
 
 def render_on_images(
@@ -62,7 +64,7 @@ def render_on_images(
             "img_shape"
         ], "Image shape must match the camera calibration!"
         # Project the vertices on the image
-        # We've already transformed the vertices to the camera frame, so we can just
+        # We've already transformed the vertices to the camera frame, so we can just 
         # project them on the image without any transformation.
         if not isinstance(mesh, list):
             meshlist = [mesh]
@@ -85,14 +87,19 @@ def render_on_images(
                 vertices_2d, _ = cv.projectPoints(
                     mesh.vertices, np.zeros(3), np.zeros(3), camera_matrix, dist_coeffs
                 )
-            # Draw the mesh on the image
-            img = ImageOps.mirror(img) # TODO: Why is this needed? Our extrinsics are wrong?
+
+            try:
+                img = ImageOps.mirror(img) # TODO: Why is this needed?
+            except OSError:
+                print(f"Error in file {img_path}")
+                continue
+
             draw = ImageDraw.Draw(img)
             for face in mesh.faces:
                 # Numpy version:
                 # face_vertices = np.clip(vertices_2d[face], 0, img.size)
                 # points = [tuple(p[0]) for p in face_vertices]
-                # Faster version (don't ask me):
+    
                 face_vertices = vertices_2d[face]
                 points = [max(min(tuple(p[0]), img.size), (0, 0)) for p in face_vertices]
                 draw.polygon(
@@ -104,7 +111,6 @@ def render_on_images(
         # Save the image
         img.save(os.path.join(output_dir, f"{timestamp:08d}.png"))
     print("[*] Done!")
-
 
 
 def main(root: str):
@@ -136,6 +142,8 @@ def main(root: str):
                                 iuv_frames.png
                         capture1/ <-- Kinect 1 capture
                             ...
+
+
                         ...
                         omni/ <-- Omni capture
     """

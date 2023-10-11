@@ -12,6 +12,7 @@ HuMoR-based annotation pipeline.
 import argparse
 import os
 import pickle
+import subprocess
 import sys
 import numpy as np
 import trimesh
@@ -37,7 +38,7 @@ PREPROCESS_MIN_FRAMES_PER_PERSON = 30
 CAM_INTRINSICS_PATH = {
     "k0": "../calibration/intrinsics/k0_rgb_calib.json",
     "k1": "../calibration/intrinsics/k1_rgb_calib.json",
-    "omni": "../calibration/intrinsics/omni_intrinsics_new.json",
+    "omni": "../calibration/intrinsics/omni_calib.json",
 }
 
 
@@ -280,6 +281,7 @@ def synchronize_annotations(
         # 2. Rename that frame to frame_sync_files[-1] (the omni frame) and add it to the merged
         # sequence
         merged_sequence.append({"omni": (omni_ts, match[1])})
+        print(omni_ts, match)
 
     # for frame_sync_files in synced_filenames_array:
         # frame = {}
@@ -305,11 +307,9 @@ def get_calibration_files(root) -> Dict[str, str]:
     calib_folder = os.path.join(root, "calib")
     for calib_root, _, calib_files in os.walk(calib_folder):
         for fpath in calib_files:
-            # only get the pkl files for the calibrations
-            if fpath.endswith(".pkl"): 
+            if os.path.basename(calib_root).startswith("k") and fpath.endswith(".pkl"):
                 current_room_calib[
-                    # f"{os.path.basename(calib_root)}_{os.path.basename(fpath).split('.')[0]}"
-                    f"{os.path.basename(fpath).split('.')[0]}"
+                    f"{os.path.basename(calib_root)}_{os.path.basename(fpath).split('.')[0]}"
                 ] = f"{calib_root}/{fpath}"
     return current_room_calib
 
@@ -320,7 +320,7 @@ def annotate_participant(
     """
     Returns a list of viewpoint annotations for each capture in the participant folder. The
     annotations are dictionaries with the timestamp of the image as the key and the
-    reprojected mesh as the value. 
+    reprojected mesh as the value.
     """
     multi_view_sequence_annotations = []
     for capture_root, dirs, _ in os.walk(root):
@@ -331,10 +331,13 @@ def annotate_participant(
         capture_name = os.path.basename(capture_root)
         if capture_name.startswith("capture"):
             kinect_id = capture_name.split("capture")[1]
+            print(current_room_calib)
             sequence_meshes = annotate_capture(
                 capture_root,
                 humor_docker_script,
                 CAM_INTRINSICS_PATH[f"k{kinect_id}"],
+                # current_room_calib[f"k{kinect_id}-omni_k{kinect_id}_cam_to_world"],
+                # current_room_calib[f"k{kinect_id}-omni_omni_world_to_cam"],
                 current_room_calib[f"k{kinect_id}_rgb_cam_to_world"],
                 current_room_calib[f"k{kinect_id}_omni_world_to_cam"],
                 keep_dirty=keep_dirty,
@@ -342,6 +345,7 @@ def annotate_participant(
             )
             multi_view_sequence_annotations.append(sequence_meshes)
     return multi_view_sequence_annotations
+
 
 def main(
     dataset_path: str,
@@ -396,11 +400,10 @@ def main(
     current_room_calib = {}
     for root, dirs, _ in os.walk(dataset_path):
         folder = os.path.basename(root)
-        print(f"=== Processing sequences from {root} ===")
         if "calib" in dirs:
             # Now we are in a room folder, so we can get the
             # extrinsics for the current room and annotate the sequences
-            print("[*] Getting calibration files...")
+            print(f"=== Processing sequences from {folder} ===")
             current_room_calib = get_calibration_files(root)
             dirs.pop(dirs.index("calib"))
             continue

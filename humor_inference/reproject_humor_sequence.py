@@ -297,6 +297,15 @@ def export_timestamped_mesh_seq(
     return {int(ts): mesh for ts, mesh in zip(timestamps, mesh_seq)}
 
 
+def get_camera_params(camera_calib):
+    camera_matrix = camera_calib["intrinsics"]
+    dist_coeffs = camera_calib["distortion"]
+    xi = camera_calib.get("xi")
+    use_omni = xi is not None
+    xi = xi.item() if isinstance(xi, np.ndarray) else xi
+    return use_omni, camera_matrix, xi, dist_coeffs
+
+
 def render_on_images(
     images_dir: str,
     mesh_seq: List[trimesh.Trimesh],
@@ -307,11 +316,7 @@ def render_on_images(
     Render the mesh sequence on the images in the directory.
     """
     # Load the camera intrinsics and distortion coefficients from the pickle file
-    camera_matrix = camera_calib["intrinsics"]
-    dist_coeffs = camera_calib["distortion"]
-    xi = camera_calib.get("xi")
-    use_omni = xi is not None
-    xi = xi.item() if isinstance(xi, np.ndarray) else xi
+    use_omni, camera_matrix, xi, dist_coeffs = get_camera_params(camera_calib)
 
     # Load all images in the directory
     images = []
@@ -402,15 +407,8 @@ def main(
     output_path: Optional[str] = None,
     cam1_calib_pth: Optional[str] = None,
 ) -> Optional[Dict[int, trimesh.Trimesh]]:
-    with open(cam0_to_world_pth, "rb") as f:
-        cam0_to_world = make_44(pickle.load(f))
-    with open(world_to_cam1_pth, "rb") as f:
-        world_to_cam1 = make_44(pickle.load(f))
 
-    device = (
-        torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
-    )
-
+    device = (torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu"))
     results_dir = os.path.join(humor_output_path, "results_out", "final_results")
     res_file = os.path.join(results_dir, "stage3_results.npz")
     if not os.path.isfile(res_file):

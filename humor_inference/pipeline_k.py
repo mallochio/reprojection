@@ -12,6 +12,7 @@ HuMoR-based annotation pipeline.
 import argparse
 import os
 import pickle
+import subprocess
 import sys
 import numpy as np
 import trimesh
@@ -21,8 +22,9 @@ from reproject_humor_sequence import main as reproject
 from preprocess import main as preprocess
 import cv2
 import glob
+import os
+from tqdm import tqdm
 
-# TODO: Move to a config file
 RGB_FOLDER = "rgb"
 IR_FOLDER = "ir"
 DEPTH_FOLDER = "depth"
@@ -37,34 +39,36 @@ PREPROCESS_MIN_FRAMES_PER_PERSON = 30
 CAM_INTRINSICS_PATH = {
     "k0": "../calibration/intrinsics/k0_rgb_calib.json",
     "k1": "../calibration/intrinsics/k1_rgb_calib.json",
-    "omni": "../calibration/intrinsics/omni_intrinsics_new.json",
+    "omni": "../calibration/intrinsics/omni_c.json",
 }
 
 
-def make_video(root, output_vid_file):
+def make_video(roottt, output_vid_file):
     img_array = []
-    for filename in glob.glob(f'{root}/*.jpg'):
+    capt = roottt.split('/')[-3]
+    for filename in sorted(glob.glob(f'{roottt}/*.jpg')):
+        filename = os.path.join(f'/openpose/data/dataset/session-recordings/test/2022-10-07/at-paus/bedroom/sid/{capt}/rgb',
+                                os.path.basename(filename))
         img = cv2.imread(filename)
         img_array.append(img)
 
     height, width, _ = img.shape
-    size = (width,height)
-    
-    out = cv2.VideoWriter(output_vid_file,cv2.VideoWriter_fourcc(*'DIVX'), 30, size)
-    
-    for i in range(len(img_array)):
+    size = (width, height)
+
+    out = cv2.VideoWriter(output_vid_file, cv2.VideoWriter_fourcc(*'DIVX'), 30, size)
+    print(f"Writing video to {output_vid_file}")
+    for i in tqdm(range(len(img_array))):
         out.write(img_array[i])
     out.release()
 
-
 def annotate_capture(
-    capture_path: str,
-    humor_docker_script: str,
-    base_cam_intrinsics_path: str,
-    basecam_to_world_pth: str,
-    world_to_destcam_pth: str,
-    keep_dirty: bool = False,
-    verbose: bool = False,
+        capture_path: str,
+        humor_docker_script: str,
+        base_cam_intrinsics_path: str,
+        basecam_to_world_pth: str,
+        world_to_destcam_pth: str,
+        keep_dirty: bool = False,
+        verbose: bool = False,
 ) -> Dict[int, trimesh.Trimesh]:
     """Go through a capture folder for one participant in one location, annotate each subsequence
     where a person was detected, and reproject the HuMoR output to the other camera. Then, join the
@@ -114,7 +118,6 @@ def annotate_capture(
         # maybe? With these parameters, FFMPEG just builds a 30hz video from the images but since
         # we recorded at ~15hz, the video looks sped up. That might be the best way to deal with
         # the disparity because the movements remain smooth, just faster.
-
         output_vid_file = os.path.join(
             capture_path, PREPROCESS_FOLDER, f"{seq_name}.mp4"
         )
@@ -127,9 +130,10 @@ def annotate_capture(
             #     f"ffmpeg -framerate 30 -pattern_type glob -i '{root}/*.jpg' -c:v"
             #     + f" libx264 -r 30 -loglevel quiet {output_vid_file}"
             # )
+            path_imgs = '/openpose/data/dataset/session-recordings/test/2022-10-07/at-paus/bedroom/sid/capture1/preprocessed/5_person'
             make_video(root, output_vid_file)
+            # TODO! read all images in each folder. check the order, with a for loop create video by opencv#
 
-            # TODO: Collate the images into video with 30fps using cv2.VideoWriter
             print(f"\t\t-> Output file {output_vid_file} created.")
         with open(os.path.join(capture_path, "humor.log"), "w") as f:
             with redirect_stdout(sys.stdout if verbose else f):
@@ -172,7 +176,7 @@ def annotate_capture(
                     )
                     continue
                 assert (
-                    type(timestamped_meshes) == dict
+                        type(timestamped_meshes) == dict
                 ), "reproject_humor_sequence.main() did not return a dict"
             for timestamp, mesh in timestamped_meshes.items():
                 if timestamp in sequence_meshes:
@@ -184,9 +188,6 @@ def annotate_capture(
                     )
                 else:
                     sequence_meshes[timestamp] = mesh
-    assert len(sequence_meshes.keys()) == len(
-        set(sequence_meshes.keys())
-    ), "Duplicate timestamps in sequence_meshes!"
     return sequence_meshes
 
 
@@ -280,6 +281,7 @@ def synchronize_annotations(
         # 2. Rename that frame to frame_sync_files[-1] (the omni frame) and add it to the merged
         # sequence
         merged_sequence.append({"omni": (omni_ts, match[1])})
+        print(omni_ts, match)
 
     # for frame_sync_files in synced_filenames_array:
         # frame = {}
@@ -305,12 +307,11 @@ def get_calibration_files(root) -> Dict[str, str]:
     calib_folder = os.path.join(root, "calib")
     for calib_root, _, calib_files in os.walk(calib_folder):
         for fpath in calib_files:
-            # only get the pkl files for the calibrations
-            if fpath.endswith(".pkl"): 
+            if fpath.endswith(".pkl"):
                 current_room_calib[
-                    # f"{os.path.basename(calib_root)}_{os.path.basename(fpath).split('.')[0]}"
-                    f"{os.path.basename(fpath).split('.')[0]}"
+                    os.path.basename(fpath).split(".")[0]
                 ] = f"{calib_root}/{fpath}"
+
     return current_room_calib
 
 
@@ -320,14 +321,10 @@ def annotate_participant(
     """
     Returns a list of viewpoint annotations for each capture in the participant folder. The
     annotations are dictionaries with the timestamp of the image as the key and the
-    reprojected mesh as the value. 
+    reprojected mesh as the value.
     """
     multi_view_sequence_annotations = []
-    for capture_root, dirs, _ in os.walk(root):
-        if os.path.basename(capture_root) == "rendered":
-            # This is the rendering folder, we skip it
-            dirs.clear()
-            continue
+    for capture_root, _, _ in os.walk(root):
         capture_name = os.path.basename(capture_root)
         if capture_name.startswith("capture"):
             kinect_id = capture_name.split("capture")[1]
@@ -343,11 +340,12 @@ def annotate_participant(
             multi_view_sequence_annotations.append(sequence_meshes)
     return multi_view_sequence_annotations
 
+
 def main(
-    dataset_path: str,
-    humor_docker_script: str,
-    keep_dirty: bool = False,
-    verbose: bool = False,
+        dataset_path: str,
+        humor_docker_script: str,
+        keep_dirty: bool = False,
+        verbose: bool = False,
 ):
     """
     Args:
@@ -360,20 +358,14 @@ def main(
                 room/
                     calib/
                         k0-omni/
-                            k0_cam_to_world.pkl
-                            k0_world_to_cam.pkl
-                            omni_cam_to_world.pkl
-                            omni_world_to_cam.pkl
+                            extrinsics.pkl
                             capture0/
                                 extrinsics.pkl
                             capture1
                             ...
                             omni
                         k1-omni/
-                            k1_cam_to_world.pkl
-                            k1_world_to_cam.pkl
-                            omni_cam_to_world.pkl
-                            omni_world_to_cam.pkl
+                            extrinsics.pkl
                             ...
                         ...
                     participant/
@@ -396,15 +388,14 @@ def main(
     current_room_calib = {}
     for root, dirs, _ in os.walk(dataset_path):
         folder = os.path.basename(root)
-        print(f"=== Processing sequences from {root} ===")
         if "calib" in dirs:
             # Now we are in a room folder, so we can get the
             # extrinsics for the current room and annotate the sequences
-            print("[*] Getting calibration files...")
+            print(f"=== Processing sequences from {folder} ===")
             current_room_calib = get_calibration_files(root)
             dirs.pop(dirs.index("calib"))
-            continue
-        if "capture0" in dirs:
+
+        elif "capture0" in dirs:
             # We're now in a participant sequence folder
             print(f"[*] Processing participant '{folder}'")
             sequence_annotations = annotate_participant(
@@ -430,16 +421,16 @@ def main(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="HuMoR-based annotation pipeline.")
-    parser.add_argument("dataset_path", help="Path to the dataset to annotate.")
+    parser.add_argument("--dataset-path", help="Path to the dataset to annotate.", default='../dataset/')
     parser.add_argument(
         "--humor-script",
         help="Path to the HuMoR script that will run the inference.",
-        required=True,
+        default='./run_humor_script.sh'
     )
     parser.add_argument(
         "--clean-up",
         help="Whether to clean the temporary files created during the annotation"
-        + " (HuMoR stuff, etc.). This is to be used in production.",
+             + " (HuMoR stuff, etc.). This is to be used in production.",
         action="store_true",
     )
     parser.add_argument("--verbose", "-v", help="Verbose mode.", action="store_true")
