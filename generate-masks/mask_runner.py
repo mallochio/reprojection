@@ -3,8 +3,8 @@ import shutil
 from python_on_whales import docker
 from PIL import Image
 
-# root = "/home/sid/Projects/OmniScience/dataset"
-ROOT = "/raid/i2rc/omniscience/Dataset/kinect-omni-ego/2023-02-09/at-unis/lab/a10"
+root = "/home/sid/Projects/OmniScience/dataset/session-recordings/2023-01-19/at-a06/bedroom/a06/capture0"
+# root = "/raid/i2rc/omniscience/Dataset/kinect-omni-ego/2023-02-09/at-unis/lab/a10"
 
 
 def run_docker_commands(rgb_dir):
@@ -73,7 +73,8 @@ def clean_up_broken_files(directory):
 
 def main():
     # directories = [x[0] for x in os.walk(root)]
-    for root, dirs, files in os.walk(ROOT):
+    root = "/home/sid/Projects/OmniScience/dataset/session-recordings/2023-01-19/at-a06/bedroom/a06/capture0"
+    for root, dirs, files in os.walk(root):
         print("Walking through root: ", root)
         if "rgb" in dirs and "calib" not in root:
             print("[*] Found rgb directory")

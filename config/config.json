@@ -1,31 +1,43 @@
 {
-   "base_dir": "/home/Dataset/2022-10-06/bedroom/sid/round1",
+   "base_dir": "/home/sid/Projects/OmniScience/Dataset/2022-10-06/bedroom/sid/round1",
    
-   "omni_params": "/home/reprojection/calibration/intrinsics/omni_calib.pkl",
-   "stereo_params_k0": "/home/reprojection/calibration/intrinsics/k0_rgb_to_depth.pkl",
-   "depth_params_k0": "/home/reprojection/calibration/intrinsics/k0_depth_calib.pkl",
-   "ir_params_k0": "/home/reprojection/calibration/intrinsics/k0_ir_calib.pkl",
-   "rgb_params_k0": "/home/reprojection/calibration/intrinsics/k0_rgb_calib.pkl",
+   "omni_params": "/home/sid/Projects/OmniScience/code/reprojection/calibration/intrinsics/omni_calib.pkl",
+   "stereo_params_k0": "/home/sid/Projects/OmniScience/code/reprojection/calibration/intrinsics/k0_rgb_to_depth.pkl",
+   "depth_params_k0": "/home/sid/Projects/OmniScience/code/reprojection/calibration/intrinsics/k0_depth_calib.pkl",
+   "ir_params_k0": "/home/sid/Projects/OmniScience/code/reprojection/calibration/intrinsics/k0_ir_calib.pkl",
+   "rgb_params_k0": "/home/sid/Projects/OmniScience/code/reprojection/calibration/intrinsics/k0_rgb_calib.pkl",
 
-   "stereo_params_k1": "/home/reprojection/calibration/intrinsics/k1_rgb_to_depth.pkl",
-   "depth_params_k1": "/home/reprojection/calibration/intrinsics/k1_depth_calib.pkl",
-   "ir_params_k1": "/home/reprojection/calibration/intrinsics/k1_ir_calib.pkl",
-   "rgb_params_k1": "/home/reprojection/calibration/intrinsics/k1_rgb_calib.pkl",
+   "stereo_params_k1": "/home/sid/Projects/OmniScience/code/reprojection/calibration/intrinsics/k1_rgb_to_depth.pkl",
+   "depth_params_k1": "/home/sid/Projects/OmniScience/code/reprojection/calibration/intrinsics/k1_depth_calib.pkl",
+   "ir_params_k1": "/home/sid/Projects/OmniScience/code/reprojection/calibration/intrinsics/k1_ir_calib.pkl",
+   "rgb_params_k1": "/home/sid/Projects/OmniScience/code/reprojection/calibration/intrinsics/k1_rgb_calib.pkl",
 
-   "stereo_params_k2": "/home/reprojection/calibration/intrinsics/k1_rgb_to_depth.pkl",
-   "depth_params_k2": "/home/reprojection/calibration/intrinsics/k1_depth_calib.pkl",
-   "rgb_params_k2": "/home/reprojection/calibration/intrinsics/k1_rgb_calib.pkl",
+   "stereo_params_k2": "/home/sid/Projects/OmniScience/code/reprojection/calibration/intrinsics/k1_rgb_to_depth.pkl",
+   
+   "depth_params_k2": "/home/sid/Projects/OmniScience/code/reprojection/calibration/intrinsics/k1_depth_calib.pkl",
+   "rgb_params_k2": "/home/sid/Projects/OmniScience/code/reprojection/calibration/intrinsics/k1_rgb_calib.pkl",
 
-   "pickle_dir": "/home/Dataset/2022-10-06/bedroom/sid/round1/capture0/mocap_output/mocap",
-   "depth_images_dir": "/home/Dataset/2022-10-06/bedroom/sid/round1/capture0/depth",
-   "rgb_images_dir": "/home/Dataset/2022-10-06/bedroom/sid/round1/capture0/rgb",
+   "pickle_dir": "/home/sid/Projects/OmniScience/Dataset/2022-10-06/bedroom/sid/round1/capture0/mocap_output/mocap",
+   "depth_images_dir": "/home/sid/Projects/OmniScience/Dataset/2022-10-06/bedroom/sid/round1/capture0/depth",
+   "rgb_images_dir": "/home/sid/Projects/OmniScience/Dataset/2022-10-06/bedroom/sid/round1/capture0/rgb",
 
-   "k0_depth_to_world": "/home/Dataset/2022-10-06/bedroom/calib/k0-omni/k0_depth_to_world.pkl",
-   "k0_world_to_omni": "/home/Dataset/2022-10-06/bedroom/calib/k0-omni/k0_world_to_omni.pkl",
+   "k0_depth_to_world": "/home/sid/Projects/OmniScience/Dataset/2022-10-06/bedroom/calib/k0-omni/k0_depth_to_world.pkl",
+   "k0_world_to_omni": "/home/sid/Projects/OmniScience/Dataset/2022-10-06/bedroom/calib/k0-omni/k0_world_to_omni.pkl",
 
-   "k1_depth_to_world": "/home/Dataset/2022-10-06/bedroom/calib/k0-omni/k0_depth_to_world.pkl",
+   "k1_depth_to_world": "/home/sid/Projects/OmniSciencee/Dataset/2022-10-06/bedroom/calib/k0-omni/k0_depth_to_world.pkl",
    "k1_world_to_omni": "/home/Dataset/2022-10-06/bedroom/calib/k0-omni/k0_world_to_omni.pkl",
 
-   "k2_depth_to_world": "/home/Dataset/2022-10-06/bedroom/calib/k0-omni/k0_depth_to_world.pkl",
-   "k2_world_to_omni": "/home/Dataset/2022-10-06/bedroom/calib/k0-omni/k0_world_to_omni.pkl"
+   "k2_depth_to_world": "/home/sid/Projects/OmniScience/Dataset/2022-10-06/bedroom/calib/k0-omni/k0_depth_to_world.pkl",
+   "k2_world_to_omni": "/home/sid/Projects/OmniScience/Dataset/2022-10-06/bedroom/calib/k0-omni/k0_world_to_omni.pkl",
+
+   "k0_rgb_cam_to_world": "/home/sid/Projects/OmniScience/Dataset/2022-10-06/bedroom/calib/k0-omni/k0_rgb_cam_to_world.pkl",
+   "k0_world_to_rgb_cam": "/home/sid/Projects/OmniScience/Dataset/2022-10-06/bedroom/calib/k0-omni/k0_world_to_rgb_cam.pkl",
+
+   "k1_rgb_cam_to_world": "/openpose/data/dataset/session-recordings/2023-01-19/at-a06/bedroom/calib/k1-omni/k1_rgb_cam_to_world.pkl",
+   "k1_world_to_rgb_cam": "/openpose/data/dataset/session-recordings/2023-01-19/at-a06/bedroom/calib/k1-omni/k1_world_to_rgb_cam.pkl",
+
+   "k2_rgb_cam_to_world": "/openpose/data/dataset/session-recordings/2023-01-19/at-a06/bedroom/calib/k2-omni/k2_rgb_cam_to_world.pkl",
+   "k2_world_to_rgb_cam": "/openpose/data/dataset/session-recordings/2023-01-19/at-a06/bedroom/calib/k2-omni/k2_world_to_rgb_cam.pkl",
+
+
 }
