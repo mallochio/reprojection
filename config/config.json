@@ -1,5 +1,7 @@
 {
+
    "base_dir": "/home/sid/Projects/OmniScience/Dataset/2022-10-06/bedroom/sid/round1",
+
    
    "omni_params": "/home/sid/Projects/OmniScience/code/reprojection/calibration/intrinsics/omni_calib.pkl",
    "stereo_params_k0": "/home/sid/Projects/OmniScience/code/reprojection/calibration/intrinsics/k0_rgb_to_depth.pkl",

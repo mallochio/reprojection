@@ -1,0 +1,49 @@
+
+from enum import Enum
+
+class Activities (Enum):
+    DRINK = 0
+    EAT = 1
+    BRUSHING_TEETH = 2
+    BRUSHING_HAIR = 3
+    PICKUP = 4
+    READ = 5
+    WRITE = 6
+    PUT_ON_JACKET = 7
+    TAKE_OFF_JACKET = 8
+    PUT_ON_SHOE = 9
+    TAKE_OFF_SHOE = 10
+    PUT_ON_GLASSES = 11
+    TAKE_OFF_GLASSES = 12
+    MAKE_A_PHONE_CALL = 13
+    PLAY_WITH_PHONE_OR_TABLET = 14
+    USE_THE_LAPTOP = 15
+    SNEEZE = 16
+    COUGH = 17
+    STAGGERING = 18
+    FALLING = 19
+    BLOW_NOSE = 20
+    TAKE_PILL = 21
+    WATCH_TV = 22
+    TAKE_A_NAP = 23
+    PREPARE_A_SANDWICH = 24
+    PREPARE_HOT_MEAL = 25
+    PREPARE_HOT_BEVERAGE = 26
+    CLEANUP = 27
+    MOPPING_THE_FLOOR = 28
+    WASHING_DISHES = 29
+    USE_MICROWAVE = 30
+    DANCE = 31
+    DO_EXERCISE = 32
+    HANDSTAND = 33
+    PUSH_UP = 34
+    MOVING_OBJECTS = 35
+    TIE_THE_SHOES = 36
+    # Poses
+    SITTING = 37
+    STANDING = 38
+    LAYING = 39
+    BENDING = 40
+
+
+    
