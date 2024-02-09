@@ -7,7 +7,6 @@ sys.path.append(abspath(".."))
 from pathlib import Path
 from tqdm import tqdm
 
-
 import subprocess
 from config import load_config as conf
 config = conf.load_config()
@@ -16,8 +15,8 @@ config = conf.load_config()
 script_path = "/openpose/data/code/reprojection/calibration/opencv_calibration/get_cam_pose.py"
 
 if __name__ == "__main__":
-    base_dir = Path("/openpose/data/dataset/session-recordings/test/")
-    base_dir = Path("/home/sid/Projects/OmniScience/dataset/session-recordings/test/")
+    base_dir = Path("/openpose/data/dataset/session-recordings/a10/calib")
+    # base_dir = Path("/home/sid/Projects/OmniScience/dataset/session-recordings/test/")
     subdir = list(base_dir.glob('**'))
     # Get all subdirectories named "rgb", "ir", and "omni" from the base directory
     calib_rgb_dirs = [x for x in subdir if (x.name == "rgb" and "/calib/" in str(x))]

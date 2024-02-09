@@ -230,6 +230,13 @@ def run_smpl(res_dict, body_model):
 
 
 # =================== My code starts here =============================
+def save_pointcloud(body_mesh_seq: List[trimesh.Trimesh]):
+    # Save point clouds in body_mesh_seq to an npz file
+    pointclouds = []
+    for body_mesh in body_mesh_seq:
+        pointclouds.append(body_mesh.vertices)
+    pointclouds = np.array(pointclouds)
+    np.savez_compressed("/home/sid/Projects/OmniScience/dataset/session-recordings/2024-01-12/at-unis/lab/sid/capture2/results_out/final_results/pointclouds.npz", pointclouds=pointclouds)
 
 
 def transform_SMPL_sequence(
@@ -256,7 +263,7 @@ def transform_SMPL_sequence(
     """ =============================== """
     print(f"[*] Processing sequence of {len(body_mesh_seq)} frames...")
     t_body_mesh_seq = []
-    for body_mesh in tqdm(body_mesh_seq, total=len(body_mesh_seq)):
+    for body_mesh in tqdm(body_mesh_seq, total=len(body_mesh_seq)):         
         # Apply transform
         body_mesh.apply_transform(transform)
         t_body_mesh_seq.append(body_mesh)
@@ -301,7 +308,7 @@ def get_camera_params(camera_calib):
     camera_matrix = camera_calib["intrinsics"]
     dist_coeffs = camera_calib["distortion"]
     xi = camera_calib.get("xi")
-    use_omni = xi is not None
+    use_omni = xi is not None   
     xi = xi.item() if isinstance(xi, np.ndarray) else xi
     return use_omni, camera_matrix, xi, dist_coeffs
 
@@ -326,6 +333,11 @@ def render_on_images(
             images.append(os.path.join(images_dir, filename))
     images.sort()
     # assert len(mesh_seq) == len(images), "Number of images and meshes must be the same!"
+    print(f"Number of images: {len(images)}")
+    # mesh_mask_array_file = "/home/sid/Projects/OmniScience/code/reprojection/helper-scripts/mask_index.txt"
+    # mask_index = np.loadtxt(mesh_mask_array_file, dtype=np.int32)
+    # mesh_seq = [mesh for i, mesh in enumerate(mesh_seq) if mask_index[i] == 1]
+    print(f"Number of meshes: {len(mesh_seq)}")
     if len(images) > len(mesh_seq):
         images = images[: len(mesh_seq)]
         print("Warning: more images than meshes, truncating images to match.")
@@ -408,7 +420,7 @@ def main(
     cam1_calib_pth: Optional[str] = None,
 ) -> Optional[Dict[int, trimesh.Trimesh]]:
 
-    device = (torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu"))
+    device = (torch.device("cuda:1") if torch.cuda.is_available() else torch.device("cpu"))
     results_dir = os.path.join(humor_output_path, "results_out", "final_results")
     res_file = os.path.join(results_dir, "stage3_results.npz")
     if not os.path.isfile(res_file):
@@ -437,6 +449,7 @@ def main(
     # run through SMPL
     pred_body = run_smpl(pred_res, pred_bm)
     print("[*] Loaded the sequence of SMPL models!")
+
 
     with open(cam0_to_world_pth, "rb") as f:
         cam0_to_world = make_44(pickle.load(f))

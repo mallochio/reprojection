@@ -170,7 +170,6 @@ def main(root: str):
         render_on_images(img_dir, cam_timed_meshes, cam_intrinsics, output_path)
 
 
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('root', type=str, help='Path to the sequence directory.')

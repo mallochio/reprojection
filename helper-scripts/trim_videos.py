@@ -46,7 +46,7 @@ def rename_files(out_dir):
 
         old_name = os.path.join(masks_dir, masks[i])
         new_name = os.path.join(masks_dir, "{:06d}.png".format(i+1))
-        os.rename(old_name, new_name)
+        os.rename(old_name, new_name)        
 
 
 def select_frames(root_dir, n_minutes, delay_till_first_frame):
@@ -55,10 +55,9 @@ def select_frames(root_dir, n_minutes, delay_till_first_frame):
     op_frames_dir = os.path.join(root_dir, "op_frames")
     op_keypoints_dir = os.path.join(root_dir, "op_keypoints")
     masks_dir = os.path.join(root_dir, "masks")
-
     raw_frames = sorted(os.listdir(raw_frames_dir))
     start_frame_ix = delay_till_first_frame * 15 * 60
-    start_frame = raw_frames[start_frame_ix]
+    start_frame = raw_frames[start_frame_ix]    
 
     n_frames = n_minutes * 15 * 60
     for i in raw_frames[start_frame_ix:]:

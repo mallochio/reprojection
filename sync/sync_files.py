@@ -16,8 +16,11 @@ import numpy as np
 from tqdm import tqdm
 
 
+filename = "synced_filenames_full.txt"
+
+
 def write_synced_filenames(synced_filenames, output_dir, num_kinects):
-    with open(os.path.join(output_dir, "synced_filenames.txt"), "w") as file:
+    with open(os.path.join(output_dir, filename), "w") as file:
         for i in range(num_kinects):
             file.write(f"capture{i};")
         file.write("omni\n")
@@ -25,11 +28,11 @@ def write_synced_filenames(synced_filenames, output_dir, num_kinects):
             file.write(";".join(row) + "\n")
 
 
-def get_synced_filenames(base_dir, output_dir):
+def get_synced_filenames_partial(base_dir, output_dir):
     with open(os.path.join(base_dir, "shots.txt"), "r") as file:
         # Skip the first line, read the second and format it into a list of lists
-        for line in file:
-            if line.startswith("/media"):
+        for ix, line in enumerate(file):
+            if ix == 1: #line.startswith("/media"):
                 line = line.strip().split(";")
                 num_kinects = len(line) - 1
                 shots = [os.path.basename(path) for path in line]
@@ -45,7 +48,10 @@ def get_synced_filenames(base_dir, output_dir):
         ]
     )
     omni_timestamps = np.array(
-        [int(omni_filename.split(".")[0]) for omni_filename in omni_filenames]
+        [
+            int(omni_filename.split(".")[0]) 
+            for omni_filename in omni_filenames
+        ]
     )
 
     # Get the timestamps of the images in each kinect directory
@@ -104,6 +110,83 @@ def get_synced_filenames(base_dir, output_dir):
     print("[*] Done!")
 
 
+def get_sorted_files(base_dir, num_kinects):
+    # Get the timestamps of the images in the omni directory
+    omni_filenames = sorted(
+        [
+            filename
+            for filename in os.listdir(os.path.join(base_dir, "omni"))
+            if filename.endswith(".jpg")
+        ]
+    )
+    omni_timestamps = np.array([int(omni_filename.split(".")[0]) for omni_filename in omni_filenames])
+
+    # Get the timestamps of the images in each kinect directory
+    kinect_filenames = [
+        sorted(
+            [
+                filename
+                for filename in os.listdir(os.path.join(base_dir, f"capture{i}/rgb"))
+                if filename.endswith(".jpg")
+            ]
+        )
+        for i in range(num_kinects)
+    ]
+    kinect_timestamps = np.array(
+        [
+            np.array([int(filename.split(".")[0]) for filename in kinect_filenames[i]])
+            for i in range(num_kinects)
+        ],
+        dtype=object,
+    )
+    return omni_filenames, omni_timestamps, kinect_filenames, kinect_timestamps    
+
+
+def get_synced_filenames_full(base_dir, output_dir):
+    with open(os.path.join(base_dir, "shots.txt"), "r") as file:
+        shots = []
+        for ix, line in enumerate(file):
+            if ix == 1: #line.startswith("/media"):
+                line = line.strip().split(";")
+                num_kinects = len(line) - 1
+                shots = [os.path.basename(path) for path in line]
+
+    omni_filenames, omni_timestamps, kinect_filenames, kinect_timestamps = get_sorted_files(base_dir, num_kinects)
+    
+    # Compute deltas based on the shots file
+    # omni_start_timestamp = int(omni_filenames[0].split(".")[0])
+    kinect_shots = []
+    for i in range(num_kinects):
+        kinect_start_timestamp = int(shots[i].split(".")[0])
+        kinect_shots.append(kinect_start_timestamp)
+    omni_reference_timestamp = int(shots[-1].split(".")[0])
+    deltas = np.array(
+        [kinect_shots[i] - omni_reference_timestamp for i in range(num_kinects)],
+        dtype=object,
+    )
+
+    synced_filenames = []
+    # Now run through the omni images and find the nearest image in each directory after adding the delta
+    print("[*] Syncing files")
+    for omni_timestamp in tqdm(omni_timestamps):
+        omni_filename = f"{omni_timestamp}.jpg"
+        synced_shot = []
+        for i in range(num_kinects):
+            kinect_timestamp_approx = omni_timestamp + deltas[i]
+            # get nearest timestamp in the kinect directory
+            kinect_timestamp_new = min(
+                kinect_timestamps[i], key=lambda x: abs(x - kinect_timestamp_approx)
+            )
+            kinect_filename = f"{kinect_timestamp_new}.jpg"
+            synced_shot.append(kinect_filename)
+        synced_shot.append(omni_filename)
+        synced_filenames.append(synced_shot)
+
+    print("[*] Writing to file")
+    write_synced_filenames(synced_filenames, output_dir, num_kinects)
+    print("[*] Done!")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Script to generate the synced filenames for the dataset, choosing the omni image as the reference"
@@ -112,13 +195,13 @@ if __name__ == "__main__":
         "--base_dir",
         type=str,
         help="The base directory of the dataset",
-        default="/home/sid/Projects/OmniScience/dataset/session-recordings/2022-10-07/at-paus/bedroom/sid",
+        default="/home/sid/Projects/OmniScience/dataset/session-recordings/2024-01-12/at-unis/lab/sid",
     )
     parser.add_argument(
         "--output_dir",
         type=str,
         help="The directory to save the synced filenames",
-        default="/home/sid/Projects/OmniScience/dataset/session-recordings/2022-10-07/at-paus/bedroom/sid",
+        default="/home/sid/Projects/OmniScience/dataset/session-recordings/2024-01-12/at-unis/lab/sid",
     )
     args = parser.parse_args()
-    get_synced_filenames(args.base_dir, args.output_dir)
+    get_synced_filenames_full(args.base_dir, args.output_dir)

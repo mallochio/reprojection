@@ -17,8 +17,6 @@ from typing import Optional, Tuple
 import cv2 as cv
 import numpy as np
 
-""" Most of this file was written by GitHub Copilot. """
-
 
 def draw_axes(img, corners, imgpts):
     corner = tuple([int(x) for x in corners[0].ravel()])
@@ -137,6 +135,7 @@ def get_cam_pose(
             cube = (
                 np.array(
                     [
+
                         [0, 0, 0],
                         [0, 1, 0],
                         [1, 1, 0],
@@ -155,7 +154,7 @@ def get_cam_pose(
             if fish_eye:
                 cube = np.expand_dims(cube, axis=0)
                 xi = xi.item() if isinstance(xi, np.ndarray) else xi
-                print(cube.shape)
+           
                 img_pts, _ = cv.omnidir.projectPoints(
                     cube, rvecs, tvecs, cam_matrix, xi, dist_coeffs
                 )

@@ -1,5 +1,16 @@
+from imp import load_package
+import os
+import sys
+import trimesh
+from threading import local
 import numpy as np
+import pandas as pd
 from multiprocessing import Pool
+
+sys.path.insert(0, '/home/sid/Projects/OmniScience/other/humor')
+
+meshlist = sorted(os.listdir("/home/sid/Projects/OmniScience/dataset/session-recordings/2024-01-12/at-unis/lab/sid/capture2/rgb"))
+
 
 def findinvpoly(coeffs, radius):
     maxerr = np.inf
@@ -9,8 +20,7 @@ def findinvpoly(coeffs, radius):
         pol, err, _ = findinvpoly2(coeffs, radius, N)
         maxerr = np.max(err)
         print(N, maxerr)
-        # break
-    
+
     return pol, err, N
 
 
@@ -68,21 +78,6 @@ def correct_k_distortion(Xk, Yk, K):
     return Xu, Yu
 
 
-def world_to_omni(Ts, world_coordinates, K_omni_params, D_omni, uw, uh):
-    omni_coordinates = np.matmul(Ts, world_coordinates.T)
-    X, Y = omni_coordinates[0, :] / omni_coordinates[2, :], omni_coordinates[1, :] / omni_coordinates[2, :]
-
-    X, Y = correct_d_distortion(X, Y, D_omni)
-    X, Y = correct_k_distortion(X, Y, K_omni_params)
-
-    Y[Y < 0] = 0
-    X[X < 0] = 0
-    Y[np.round(Y) >= uh] = uh - 1
-    X[np.round(X) >= uw] = uw - 1
-
-    return X, Y
-
-
 def calculate_rho(poly_temp):
     rho_temp = np.roots(poly_temp)
     res = np.logical_and(np.imag(rho_temp) == 0, rho_temp > 0)
@@ -94,9 +89,7 @@ def calculate_rho(poly_temp):
         rho = rho_temp[res][0]
     return rho
 
-
 pool = Pool(4)
-
 
 def omni3dtopixel(X, Y, Z, omni_params):
     eps = 1e-9
@@ -120,41 +113,55 @@ def omni3dtopixel(X, Y, Z, omni_params):
     return x, y
 
 
-def world_to_omni_scaramuzza(Ts, world_coordinates, ocam_intrinsics, uw, uh):
-    if len(world_coordinates) == 0:
-        return [0], [0]
+def process_pointclouds(pcloud):
+    # pcloud[:, 0] = -pcloud[:, 0] # To mirror the pointcloud in the image from which it was obtained
+    pcloud = np.append(pcloud, np.ones((pcloud.shape[0], 1)), axis=1) # Each pointcloud is of shape (6890,3), make it (6890, 4) using ones
+    return pcloud
 
-    omni_coordinates = np.matmul(Ts, world_coordinates.T)
-    max_z = omni_coordinates[2, :].max()
-    X, Y, Z = omni_coordinates[0, :], omni_coordinates[1, :], omni_coordinates[2, :]
 
-    #indices = (Z < max_z - 0.05)
+def get_mesh_camera_coordinates(frame_list, body_mesh_seq):
+    image = frame_list["capture2"]
+    image = os.path.basename(image.replace("png", "jpg"))
+    ix = meshlist.index(image)
 
-    #X = X[indices]
-    #Y = Y[indices]
-    #Z = Z[indices]
+    # Get pointcloud from body_mesh_seq
+    pcloud = body_mesh_seq[ix].vertices
+    pcloud = process_pointclouds(pcloud) 
+    return pcloud, body_mesh_seq[ix]
 
-    x, y = omni3dtopixel(X, Y, Z, ocam_intrinsics)
 
-    c, d, e = ocam_intrinsics['c'], ocam_intrinsics['d'], ocam_intrinsics['e']
-    xc, yc = ocam_intrinsics['Centre']
+def modify_outliers(x, y):
+    # Check for outliers in the omni coordinates by taking the median of the x and y coordinates and assign to median values
+    x_median = np.median(x)
+    y_median = np.median(y)
+    x_std = np.std(x)
+    y_std = np.std(y)
+    x_outliers = np.abs(x - x_median) > 2 * x_std
+    y_outliers = np.abs(y - y_median) > 2 * y_std
+    outliers = np.logical_or(x_outliers, y_outliers)
 
-    x = x * c + y * d + xc
-    y = x * e + y + yc
-
-    y[y < 0] = 0
-    x[x < 0] = 0
-    y[np.round(y) >= uh] = uh - 1
-    x[np.round(x) >= uw] = uw - 1
-
+    x[outliers] = x_median
+    y[outliers] = y_median
     return x, y
 
 
-def world_to_omni_scaramuzza_fast(Ts, world_coordinates, ocam_intrinsics, uw, uh):
+def world_to_omni_scaramuzza_fast(Ts, world_coordinates, ocam_intrinsics, uw, uh, frame_list, body_mesh_seq):
     if len(world_coordinates) == 0:
         return [0], [0]
     
+    world_coordinates, body_mesh = get_mesh_camera_coordinates(frame_list, body_mesh_seq) 
     omni_coordinates = np.matmul(Ts, world_coordinates.T)
+
+    omni_coordinates_trimesh = body_mesh.apply_transform(Ts)
+    
+    # # Check if the two transformations are the same
+    # print(omni_coordinates[3, :]) # These are ones
+    # print(omni_coordinates_trimesh.vertices.T)
+    # assert np.allclose(omni_coordinates[:3, :], omni_coordinates_trimesh.vertices.T)
+
+    # Ensure the omni's points are within camera frustum
+    omni_coordinates = omni_coordinates[:, omni_coordinates[2, :] > 0]
+
     max_z = omni_coordinates[2, :].max()
     X, Y, Z = omni_coordinates[0, :], omni_coordinates[1, :], omni_coordinates[2, :]
 
@@ -188,4 +195,6 @@ def world_to_omni_scaramuzza_fast(Ts, world_coordinates, ocam_intrinsics, uw, uh
     y[np.round(y) >= uh] = uh - 1
     x[np.round(x) >= uw] = uw - 1
 
+    # x, y = modify_outliers(x, y)
+    
     return x, y
