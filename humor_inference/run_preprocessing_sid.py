@@ -13,6 +13,9 @@ import os, sys
 import logging
 import subprocess
 
+
+ROOT_DIR = "/openpose/data/mount-NAS/kinect-omni-ego"  # TODO - This is mounted with SSHFS so access is slow, this needs to be sped up
+
 # Configure logging
 logging.basicConfig(level=logging.INFO,
                     filename='preprocessing_log.txt',  # Log file name
@@ -23,7 +26,6 @@ logging.basicConfig(level=logging.INFO,
 logger = logging.getLogger(__name__)
 python_executable = sys.executable
 
-ROOT_DIR = "/openpose/data/mount-NAS/kinect-omni-ego"  # This is mounted with SSHFS so access is slow
 
 def main():
     for root, dirs, files in os.walk(ROOT_DIR):
