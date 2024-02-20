@@ -14,3 +14,12 @@ import torch
 import lightning as pl
 from lightning.fabric import Fabric
 
+if __name__ == "__main__":
+    # Create a model
+    model = Fabric()
+
+    # Create a trainer
+    trainer = pl.Trainer()
+
+    # Train the model
+    trainer.fit(model)

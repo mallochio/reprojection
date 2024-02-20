@@ -19,16 +19,10 @@ import numpy as np
 
 
 def draw_axes(img, corners, imgpts):
-    corner = tuple([int(x) for x in corners[0].ravel()])
-    img = cv.line(
-        img, corner, tuple([int(x) for x in imgpts[0].ravel()]), (255, 0, 0), 5
-    )
-    img = cv.line(
-        img, corner, tuple([int(x) for x in imgpts[1].ravel()]), (0, 255, 0), 5
-    )
-    img = cv.line(
-        img, corner, tuple([int(x) for x in imgpts[2].ravel()]), (0, 0, 255), 5
-    )
+    corner = tuple(int(x) for x in corners[0].ravel())
+    img = cv.line(img, corner, tuple(int(x) for x in imgpts[0].ravel()), (255, 0, 0), 5)
+    img = cv.line(img, corner, tuple(int(x) for x in imgpts[1].ravel()), (0, 255, 0), 5)
+    img = cv.line(img, corner, tuple(int(x) for x in imgpts[2].ravel()), (0, 0, 255), 5)
     return img
 
 
@@ -60,117 +54,101 @@ def get_cam_pose(
     objp = np.zeros((grid_size[0] * grid_size[1], 3), np.float32)
     objp[:, :2] = np.mgrid[0 : grid_size[0], 0 : grid_size[1]].T.reshape(-1, 2)
     objp = objp * square_width_mm
-    img = cv.cvtColor(cv.imread(img_path), cv.COLOR_BGR2GRAY)
+    image = cv.imread(img_path)
+
+    # Mirror image if fisheye
+    if fish_eye:
+        image = cv.flip(image, 1)
+
+    img = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
     assert (
         img.shape == calibrated_img_shape
     ), "Image shape is not the same as the calibrated one."
     print(f"[*] Image shape: {img.shape}")
     # Find the chess board corners
     ret, corners = cv.findChessboardCorners(img, grid_size)
-    # If found, add object points, image points (after refining them)
-    if ret:
-        print(f"-> [{img_path}]: Found the chessboard!")
-        # Refine them
-        criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 100, 1e-6)
-        corners = cv.cornerSubPix(img, corners, (11, 11), (-1, -1), criteria)
-        # Find the rotation and translation vectors.
-        # cv.SOLVEPNP_SQPNP, cv.SOLVEPNP_ITERATIVE, cv.SOLVEPNP_IPPE? iterative seems best
-        solver = cv.SOLVEPNP_ITERATIVE
-        if fish_eye:
-            print("[*] Using omni camera solver")
-            corners = cv.omnidir.undistortPoints(
-                corners, cam_matrix, dist_coeffs, xi, np.eye(3)
-            )
-            K, D = np.eye(3), np.zeros((1, 5))
-        else:
-            K, D = cam_matrix, dist_coeffs
-        """ A note on solvePnP: 'This function returns the rotation and the translation vectors
+    if not ret:
+        raise Exception("Could not find the chessboard!")
+    
+    print(f"-> [{img_path}]: Found the chessboard!")
+    # Refine them
+    criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 100, 1e-6)
+    corners = cv.cornerSubPix(img, corners, (11, 11), (-1, -1), criteria)
+    # Find the rotation and translation vectors.
+    # cv.SOLVEPNP_SQPNP, cv.SOLVEPNP_ITERATIVE, cv.SOLVEPNP_IPPE? iterative seems best
+    solver = cv.SOLVEPNP_ITERATIVE
+    if fish_eye:
+        print("[*] Using omni camera solver")
+        corners = cv.omnidir.undistortPoints(
+            corners, cam_matrix, dist_coeffs, xi, np.eye(3)
+        )
+        K, D = np.eye(3), np.zeros((1, 5))
+    else:
+        K, D = cam_matrix, dist_coeffs
+    """ A note on solvePnP: 'This function returns the rotation and the translation vectors
         that transform a 3D point expressed in the object coordinate frame to the camera coordinate
         frame.' So it is the world-to-camera transformation. """
-        ret, rvecs, tvecs = cv.solvePnP(objp, corners, K, D, flags=solver)
-        print(f"[*] Found initial pose: R={cv.Rodrigues(rvecs)[0]}, t={tvecs}")
-        print("[*] Refining pose...")
-        # Refine the pose
-        rvecs, tvecs = cv.solvePnPRefineVVS(
-            objp,
-            corners,
-            K,
-            D,
-            rvecs,
-            tvecs,
-            criteria=(cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 500, 1e-8),
-        )
-        print(f"[*] Refined pose: R={cv.Rodrigues(rvecs)[0]}, t={tvecs}")
-        # Or with RANSAC:
-        """
-        _, rvecs, tvecs, inliers = cv.solvePnPRansac(
-            objp,
-            corners,
-            K,
-            D,
-        )
-        print(f"[*] RANSAC pose: R={cv.Rodrigues(rvecs)[0]}, t={tvecs}")
-        # Now let's look at all the solutions:
-        retval, prvecs, ptvecs, errors = cv.solvePnPGeneric(
-            objp,
-            corners,
-            K,
-            D,
-            flags=cv.SOLVEPNP_ITERATIVE,
-        )
-        # Now go through all rotation vectors and translation vectors and print them (convert  the
-        # rotation vectors to rotation matrices first):
-        for i in range(len(prvecs)):
-            print(f"[*] Solution {i}: R={cv.Rodrigues(prvecs[i])[0]}, t={ptvecs[i]}")
-            print(f"-> Error: {errors[i]}")
-
-        """
-        if debug:
-            axis = (
-                np.array([[1, 0, 0], [0, 1, 0], [0, 0, -1]], dtype=np.float32).reshape(
-                    -1, 3
-                )
-                * square_width_mm
+    ret, rvecs, tvecs = cv.solvePnP(objp, corners, K, D, flags=solver)
+    print(f"[*] Found initial pose: R={cv.Rodrigues(rvecs)[0]}, t={tvecs}")
+    print("[*] Refining pose...")
+    # Refine the pose
+    rvecs, tvecs = cv.solvePnPRefineVVS(
+        objp,
+        corners,
+        K,
+        D,
+        rvecs,
+        tvecs,
+        criteria=(cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 500, 1e-8),
+    )
+    print(f"[*] Refined pose: R={cv.Rodrigues(rvecs)[0]}, t={tvecs}")
+    if debug:
+        axis = (
+            np.array([[1, 0, 0], [0, 1, 0], [0, 0, -1]], dtype=np.float32).reshape(
+                -1, 3
             )
-            cube = (
-                np.array(
-                    [
+            * square_width_mm
+        )
+        cube = (
+            np.array(
+                [
 
-                        [0, 0, 0],
-                        [0, 1, 0],
-                        [1, 1, 0],
-                        [1, 0, 0],
-                        [0, 0, -1],
-                        [0, 1, -1],
-                        [1, 1, -1],
-                        [1, 0, -1],
-                    ],
-                    dtype=np.float32,
-                )
-                * square_width_mm
+                    [0, 0, 0],
+                    [0, 1, 0],
+                    [1, 1, 0],
+                    [1, 0, 0],
+                    [0, 0, -1],
+                    [0, 1, -1],
+                    [1, 1, -1],
+                    [1, 0, -1],
+                ],
+                dtype=np.float32,
             )
-            # img = draw_axes(rgbimg, corners, cv.projectPoints(axis, rvecs, tvecs, K, D)[0])
-            rgbimg = cv.imread(img_path)
-            if fish_eye:
-                cube = np.expand_dims(cube, axis=0)
-                xi = xi.item() if isinstance(xi, np.ndarray) else xi
-           
-                img_pts, _ = cv.omnidir.projectPoints(
-                    cube, rvecs, tvecs, cam_matrix, xi, dist_coeffs
-                )
-            else:
-                img_pts = cv.projectPoints(cube, rvecs, tvecs, cam_matrix, dist_coeffs)[
-                    0
-                ]
-            img = draw_cube(rgbimg, corners, img_pts)
-            cv.imshow("img", img)
-            k = ""
-            while k != ord("q"):
-                k = cv.waitKey(0)
-            cv.destroyAllWindows()
-    else:
-        raise Exception("Could not find the chessboard!")
+            * square_width_mm
+        )
+        # img = draw_axes(rgbimg, corners, cv.projectPoints(axis, rvecs, tvecs, K, D)[0])
+        rgbimg = cv.imread(img_path)
+        if fish_eye:
+            # Mirror image
+            rgbimg = cv.flip(rgbimg, 1)
+            cube = np.expand_dims(cube, axis=0)
+            xi = xi.item() if isinstance(xi, np.ndarray) else xi
+
+            img_pts, _ = cv.omnidir.projectPoints(
+                cube, rvecs, tvecs, cam_matrix, xi, dist_coeffs
+            )
+        else:
+            img_pts = cv.projectPoints(cube, rvecs, tvecs, cam_matrix, dist_coeffs)[
+                0
+            ]
+        img = draw_cube(rgbimg, corners, img_pts)
+        cv.imshow("img", img)
+        k = ""
+        while k != ord("q"):
+            k = cv.waitKey(0)
+        cv.destroyAllWindows()
     return rvecs, tvecs
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

@@ -195,13 +195,26 @@ if __name__ == "__main__":
         "--base_dir",
         type=str,
         help="The base directory of the dataset",
-        default="/home/sid/Projects/OmniScience/dataset/session-recordings/2024-01-12/at-unis/lab/sid",
+        default="/home/sid/Projects/OmniScience/mount-NAS/kinect-omni-ego/",
     )
     parser.add_argument(
         "--output_dir",
         type=str,
         help="The directory to save the synced filenames",
-        default="/home/sid/Projects/OmniScience/dataset/session-recordings/2024-01-12/at-unis/lab/sid",
+        default="/home/sid/Projects/OmniScience/mount-NAS/kinect-omni-ego/",
     )
     args = parser.parse_args()
-    get_synced_filenames_full(args.base_dir, args.output_dir)
+
+    # Recurse through the base directory until we find shots.txt files and then sync the files
+    for root, dirs, files in os.walk(args.base_dir):
+        if "shots.txt" in files:
+            if root == "/home/sid/Projects/OmniScience/mount-NAS/kinect-omni-ego/2023-02-09/at-unis/lab/a06":
+                dirs.clear()
+                continue
+            print(f"[*] Found shots.txt in {root}")
+            if "synced_filenames_full.txt" not in files:
+                get_synced_filenames_full(root, root)
+            dirs.clear()
+            # break
+
+    # get_synced_filenames_full(args.base_dir, args.output_dir)

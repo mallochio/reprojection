@@ -219,14 +219,13 @@ def prep_res(np_res, device, T):
 
 
 def run_smpl(res_dict, body_model):
-    smpl_body = body_model(
+    return body_model(
         pose_body=res_dict["pose_body"],
         pose_hand=None,
         betas=res_dict["betas"],
         root_orient=res_dict["root_orient"],
         trans=res_dict["trans"],
     )
-    return smpl_body
 
 
 # =================== My code starts here =============================
@@ -419,8 +418,7 @@ def main(
     output_path: Optional[str] = None,
     cam1_calib_pth: Optional[str] = None,
 ) -> Optional[Dict[int, trimesh.Trimesh]]:
-
-    device = (torch.device("cuda:1") if torch.cuda.is_available() else torch.device("cpu"))
+    device = (torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu"))
     results_dir = os.path.join(humor_output_path, "results_out", "final_results")
     res_file = os.path.join(results_dir, "stage3_results.npz")
     if not os.path.isfile(res_file):

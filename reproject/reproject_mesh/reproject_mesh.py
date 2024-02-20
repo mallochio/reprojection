@@ -16,14 +16,14 @@ import json
 import torch
 
 sys.path.append('/home/sid/Projects/OmniScience/code/reprojection')
-sys.path.append('/home/sid/Projects/OmniScience/other/humor')
+sys.path.append('/home/sid/Projects/OmniScience/other/humor/humor')
 
 # os.environ["CUDA_VISIBLE_DEVICES"]="1"
-from humor.fitting.fitting_utils import load_res, prep_res, run_smpl
-from humor.body_model.body_model import BodyModel
-from humor.body_model.utils import SMPL_JOINTS
-from humor.fitting.eval_utils import SMPL_SIZES
-from humor.utils.torch import copy2cpu as c2c
+from fitting.fitting_utils import load_res, prep_res, run_smpl
+from body_model.body_model import BodyModel
+from body_model.utils import SMPL_JOINTS
+from fitting.eval_utils import SMPL_SIZES
+from utils.torch import copy2cpu as c2c
 
 # from reprojection
 from humor_inference.reproject_humor_sequence import make_44, transform_SMPL_sequence, get_camera_params,sanitize_preds
@@ -45,7 +45,7 @@ def get_synced_meshes(transformed_meshes: List[trimesh.Trimesh]):
     mesh_indices = []
     for ix, val in df.iterrows():
         # get index of val["capture0"] in capture_files
-        mesh_index = capture_files.index(val["capture2"])
+        mesh_index = capture_files.index(val[f"capture{n}"])
         mesh_indices.append([mesh_index, val["omni"]])
 
     # Select only the meshes from transformed_meshes which are in mesh_indices
@@ -145,6 +145,7 @@ def project_meshes(
 
 
 def get_camera_parameters(params, camera_type):
+    # sourcery skip: assign-if-exp, extract-method
     camera_params = {}
     if camera_type == 'kinect':
         fx, fy = tuple(params["FocalLength"])
@@ -181,8 +182,19 @@ def get_camera_parameters(params, camera_type):
 
     return camera_params
 
+def get_transformation_matrix_opencv():
+    with open(cam0_to_world_pth, "rb") as f:
+        cam0_to_world = make_44(pickle.load(f))
 
-def get_transformation_matrix():
+    with open(world_to_cam1_pth, "rb") as f:
+        world_to_cam1 = make_44(pickle.load(f))
+
+    transform = world_to_cam1 @ cam0_to_world
+    transform[:3, 3] = transform[:3, 3] / 1000.0
+    return transform
+
+
+def get_transformation_matrix_matlab():
     # Get Matlab matrices, make a composite matrix for perspective projection
     with open(kinect_jsonpath, "r") as f:
         kParams = json.load(f)
@@ -199,17 +211,18 @@ def get_transformation_matrix():
     R_omni = omni_params["RR"][0]
     t_omni = omni_params["tt"][0].reshape(3, 1)
 
-    meo = np.zeros((4, 4))
-    meo[0:3, 0:3] = R_omni
-    meo[:3, 3] = t_omni.ravel() / 1000.
-    meo[3, :] = np.asarray([0, 0, 0, 1])
-
-    mei = np.zeros((4, 4))
-    mei[0:3, 0:3] = R_kinect
-    mei[:3, 3] = t_kinect.ravel() / 1000.
-    mei[3, :] = np.asarray([0, 0, 0, 1])
-
+    meo = make_homogenous_transformation_matrix(R_omni, t_omni)
+    mei = make_homogenous_transformation_matrix(R_kinect, t_kinect)
     return np.matmul(meo, np.linalg.pinv(mei))
+
+
+def make_homogenous_transformation_matrix(R, t):
+    homogenous_matrix = np.zeros((4, 4))
+    homogenous_matrix[0:3, 0:3] = R
+    homogenous_matrix[:3, 3] = t.ravel() / 1000.
+    homogenous_matrix[3, :] = np.asarray([0, 0, 0, 1])
+    return homogenous_matrix
+
 
 def process_meshes():    
     res_file = os.path.join(results_folder, "stage3_results.npz")
@@ -240,8 +253,10 @@ def process_meshes():
     # run through SMPL
     pred_body = run_smpl(pred_res, pred_bm)
     print("[*] Loaded the sequence of SMPL models!")
-
-    transform = get_transformation_matrix()
+    if not use_opencv:
+        transform = get_transformation_matrix_matlab()
+    else:
+        transform = get_transformation_matrix_opencv()
     print("[*] Applying the transform to the SMPL models sequence...")
     return transform_SMPL_sequence(pred_body, transform)
 
@@ -261,25 +276,45 @@ if __name__ == "__main__":
         "--root", 
         type=str, 
         help="Root directory of the dataset", 
-        default="/home/sid/Projects/OmniScience/dataset/session-recordings/2024-01-12/at-unis/lab/sid"
+        default="/home/sid/Projects/OmniScience/mount-NAS/kinect-omni-ego/2022-08-11/at-a01/living-room/a01"
     )
     parser.add_argument(
         "--omni_intrinsics", 
         type=str, 
         help="Path to the omni intrinsics file", 
-        default="/home/sid/Projects/OmniScience/code/reprojection/calibration/intrinsics/omni_intrinsics_flipped_2024.pkl"
+        default="/home/sid/Projects/OmniScience/code/reprojection/calibration/intrinsics/omni_calib.pkl"
     )
+
+    parser.add_argument(
+        "--use-opencv",
+        action="store_true",
+        dest="use_opencv",
+        default=True,
+        help="Use matrices from OpenCV",
+    )
+
+
     args = parser.parse_args()
     root = args.root
     omni_intrinsics_file = args.omni_intrinsics
+    use_opencv = args.use_opencv
 
     # Define derivations relative to the basepath
     cam1_images_path = f"{root}/omni"
-    capture_dir = f"{root}/capture2/rgb"
+    n = 0 # kinect number
+    capture_dir = f"{root}/capture{n}/rgb"
     sync_file = f"{root}/synced_filenames_full.txt"
-    results_folder = f"{root}/capture2/results_out/final_results"
-    output_path = f"{root}/capture2/results_out/reprojected"
-    kinect_jsonpath = f"{root}/k2Params.json"
-    omni_jsonpath = f"{root}/omni2Params.json"
+    results_folder = f"{root}/capture{n}/out_capture{n}/results_out/final_results"
+    output_path = f"{root}/capture{n}/out_capture{n}/results_out/reprojected"
+
+    # calib_dir = f"/home/sid/Projects/OmniScience/mount-NAS/kinect-omni-ego/2024-01-12/at-unis/lab/calib/extrinsics/k{n}-extrinsics"
+    calib_dir = f"/home/sid/Projects/OmniScience/mount-NAS/kinect-omni-ego/2022-08-11/at-a01/living-room/calib/k{n}-omni"
+    if use_opencv:
+        cam0_to_world_pth = f"{calib_dir}/capture{n}/k{n}_rgb_cam_to_world.pkl"
+        world_to_cam1_pth = f"{calib_dir}/k{n}_omni_world_to_cam.pkl"
+
+    else:
+        kinect_jsonpath = f"{calib_dir}/k{n}Params.json"
+        omni_jsonpath = f"{root}/omni{n}Params.json"
 
     main()

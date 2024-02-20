@@ -16,7 +16,7 @@ import pandas as pd
 from tqdm import tqdm
 
 
-root_dir = '/home/sid/Projects/OmniScience/dataset/session-recordings/2024-01-12/at-unis/lab/sid/capture2/results_out'
+root_dir = '/home/sid/Projects/OmniScience/mount-NAS/kinect-omni-ego/2022-08-11/at-a01/living-room/a01/capture0/out_capture0/results_out/'
 synced_filename_file = "sftp://sid@bestium:22/home/sid/Projects/OmniScience/dataset/session-recordings/2024-01-12/at-unis/lab/sid/synced_filenames_full.txt"
 kinect_dir = "sftp://sid@bestium:22/home/sid/Projects/OmniScience/dataset/session-recordings/2024-01-12/at-unis/lab/sid/capture1/rgb"
 omni_dir = "sftp://sid@bestium:22/home/sid/Projects/OmniScience/dataset/session-recordings/2024-01-12/at-unis/lab/sid/omni"
@@ -113,8 +113,8 @@ def copy_dict_files(lookup):
         
 
 if __name__ == "__main__":
-    # rename_files()
-    stitch_videos("comp_og_final_pred.mp4")
+    rename_files()
+    # stitch_videos("comp_og_final_pred.mp4")
     # lookup, mask_index = associate_omni(synced_filename_file)
     # # print(len(lookup))
     # # copy_dict_files(lookup)
