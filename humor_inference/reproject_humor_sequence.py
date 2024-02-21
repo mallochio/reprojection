@@ -388,27 +388,42 @@ def render_on_images(
 
 def sanitize_preds(pred_res, T):
     """
-    Sanitize the predictions from the SMPL model.
-    """
-    # check if have any nans valid
-    for smpk in SMPL_SIZES.keys():
-        # TODO: We may want to do something different here! Like skip the frames or whatever.
-        cur_valid = (
-            torch.sum(
-                torch.logical_not(torch.isfinite(torch.Tensor(pred_res[smpk])))
-            ).item()
-            == 0
-        )
-        if not cur_valid:
-            print(f"Found NaNs in prediction for {smpk}, filling with zeros...")
-            # print(pred_res[smpk].shape)
-            if smpk == "betas":
-                pred_res[smpk] = np.zeros((pred_res[smpk].shape[0]), dtype=np.float32)
-            else:
-                pred_res[smpk] = np.zeros(
-                    (T, pred_res[smpk].shape[1]), dtype=np.float32
-                )
+    Sanitize the predictions from the SMPL model by replacing NaNs and infinite values.
 
+    Args:
+        pred_res (dict): Dictionary containing the predictions.
+        T (int): The size of the second dimension for non-'betas' keys.
+
+    Returns:
+        dict: Sanitized predictions.
+    """
+    for smpk, size in SMPL_SIZES.items():
+        data = np.array(pred_res[smpk], dtype=np.float32, copy=True)
+
+        invalid_mask = ~np.isfinite(data)
+        
+        # Check if there are any NaN or infinite values
+        if np.any(invalid_mask):
+            print(f"Found NaNs or infinite values in prediction for {smpk}.")
+            
+            if smpk == "betas":
+                default_value = 0.0  # Define a default value to replace NaN/infs
+                data[invalid_mask] = default_value
+            else:
+                for t in range(T):
+                    if np.all(invalid_mask[t]):
+                        # If all values in the slice are NaN, use a default value
+                        data[t] = 0.0  # Or another appropriate default value
+                    elif np.any(invalid_mask[t]):
+                        valid_data = data[t][~invalid_mask[t]]
+                        if valid_data.size > 0:
+                            median = np.nanmedian(valid_data)
+                            data[t][invalid_mask[t]] = median
+                        else:
+                            data[t] = 0.0 
+            pred_res[smpk] = data
+
+    return pred_res
 
 def main(
     cam0_to_world_pth: str,
