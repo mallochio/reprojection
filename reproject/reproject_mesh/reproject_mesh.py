@@ -145,7 +145,6 @@ def project_meshes(
 
 
 def get_camera_parameters(params, camera_type):
-    # sourcery skip: assign-if-exp, extract-method
     camera_params = {}
     if camera_type == 'kinect':
         fx, fy = tuple(params["FocalLength"])
@@ -253,7 +252,7 @@ def process_meshes():
     # run through SMPL
     pred_body = run_smpl(pred_res, pred_bm)
     print("[*] Loaded the sequence of SMPL models!")
-    if not use_opencv:
+    if use_matlab:
         transform = get_transformation_matrix_matlab()
     else:
         transform = get_transformation_matrix_opencv()
@@ -286,18 +285,17 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--use-opencv",
+        "--use-matlab",
         action="store_true",
         dest="use_opencv",
-        default=True,
+        default=False,
         help="Use matrices from OpenCV",
     )
-
 
     args = parser.parse_args()
     root = args.root
     omni_intrinsics_file = args.omni_intrinsics
-    use_opencv = args.use_opencv
+    use_matlab = args.use_matlab
 
     # Define derivations relative to the basepath
     cam1_images_path = f"{root}/omni"
@@ -309,12 +307,13 @@ if __name__ == "__main__":
 
     # calib_dir = f"/home/sid/Projects/OmniScience/mount-NAS/kinect-omni-ego/2024-01-12/at-unis/lab/calib/extrinsics/k{n}-extrinsics"
     calib_dir = f"/home/sid/Projects/OmniScience/mount-NAS/kinect-omni-ego/2022-08-11/at-a01/living-room/calib/k{n}-omni"
-    if use_opencv:
-        cam0_to_world_pth = f"{calib_dir}/capture{n}/k{n}_rgb_cam_to_world.pkl"
-        world_to_cam1_pth = f"{calib_dir}/k{n}_omni_world_to_cam.pkl"
-
-    else:
+    if use_matlab:
         kinect_jsonpath = f"{calib_dir}/k{n}Params.json"
         omni_jsonpath = f"{root}/omni{n}Params.json"
+
+
+    else:
+        cam0_to_world_pth = f"{calib_dir}/capture{n}/k{n}_rgb_cam_to_world.pkl"
+        world_to_cam1_pth = f"{calib_dir}/k{n}_omni_world_to_cam.pkl"
 
     main()
