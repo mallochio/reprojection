@@ -36,6 +36,7 @@ from typing import List
 from PIL import Image, ImageDraw, ImageOps
 from tqdm import tqdm
 import pandas as pd
+from pathlib import Path
 
 
 def get_synced_meshes(transformed_meshes: List[trimesh.Trimesh]):
@@ -54,7 +55,7 @@ def get_synced_meshes(transformed_meshes: List[trimesh.Trimesh]):
     return synced_cam1_files, transformed_meshes_new
 
 
-def render_mesh(img, img_path, mesh, vertices_2d, output_dir=None, i=None):
+def render_mesh(img, img_path, mesh, vertices_2d, output_dir=None):
     try:
         img = ImageOps.mirror(img)
     except Exception as e:
@@ -83,6 +84,18 @@ def render_mesh(img, img_path, mesh, vertices_2d, output_dir=None, i=None):
     return img
 
 
+def save_projected_meshes(
+        meshes: List[trimesh.Trimesh],
+        vertices_2d_list: List[np.ndarray],
+        output_dir: str
+    ):
+    # Save the meshes that have undergone perspective projection in the original format
+    for i, (mesh, vertices_2d) in enumerate(zip(meshes, vertices_2d_list)):
+        mesh.vertices = vertices_2d
+        mesh.export(os.path.join(output_dir, f"{i:06d}.obj"))    
+    return
+
+
 def project_meshes(
     images_dir: str,
     mesh_seq: List[trimesh.Trimesh],
@@ -90,7 +103,7 @@ def project_meshes(
     output_dir: str,
 ):
     """
-    Project the mesh sequence on the omni images.
+    Project the mesh sequence on the (omni) images.
     """
     # Load the camera intrinsics and distortion coefficients from the pickle file
     use_omni, camera_matrix, xi, dist_coeffs = get_camera_params(camera_calib)
@@ -113,9 +126,9 @@ def project_meshes(
         mesh_seq = mesh_seq[: len(images)]
         print("More meshes than images, truncating meshes to match.")
 
-    for i, (mesh, img_path) in tqdm(
-        enumerate(zip(mesh_seq, images)), total=len(images)
-    ):
+    # Object to save all meshes and projected vertices
+    projected_vertices = []
+    for i, (mesh, img_path) in tqdm(enumerate(zip(mesh_seq, images)), total=len(images)):
         img = Image.open(img_path)
         assert (img.size[1], img.size[0]) == camera_calib[
             "img_shape"
@@ -138,14 +151,14 @@ def project_meshes(
             )
 
         img = render_mesh(img, img_path, mesh, vertices_2d)
+        projected_vertices.append(vertices_2d)
 
     cv2.destroyAllWindows()
     print("[*] Done!")
-    return vertices_2d, mesh
+    return projected_vertices, mesh_seq
 
 
 def get_camera_parameters(params, camera_type):
-    # sourcery skip: assign-if-exp, extract-method
     camera_params = {}
     if camera_type == 'kinect':
         fx, fy = tuple(params["FocalLength"])
@@ -224,7 +237,23 @@ def make_homogenous_transformation_matrix(R, t):
     return homogenous_matrix
 
 
-def process_meshes():    
+def associate_partial_meshes(mesh_folder, image_folder, window_size = 60, overlap = 10):
+    # Function to associate partial meshes with the corresponding images and returns the list of associated pairs
+    mesh_folder_root = str(Path(mesh_folder).parent)
+    valid_folders = sorted(os.listdir(mesh_folder_root))
+    if "final_results" in valid_folders:
+        valid_folders.remove("final_results")
+    subfolder_number = valid_folders.index(os.path.basename(mesh_folder)) # Assumes no other folders are present in the root folder containing the mesh_folder
+
+    step_size = window_size - overlap
+    start_index = 1 + (subfolder_number - 1) * step_size
+    end_index = start_index + window_size - 1
+
+    all_image_files = sorted(os.listdir(image_folder))
+    return all_image_files[start_index-1:end_index]
+
+
+def get_meshes(results_folder: str):
     res_file = os.path.join(results_folder, "stage3_results.npz")
     if not os.path.isfile(res_file):
         raise Exception(f"Could not find {res_file}!")
@@ -233,7 +262,7 @@ def process_meshes():
     pred_res = np.load(res_file)
     T = pred_res["trans"].shape[0]
 
-    sanitize_preds(pred_res, T)
+    sanitize_preds(pred_res, T) # This function is currently just checking if the predictions have invalid values
     pred_res = prep_res(pred_res, device, T)
     num_pred_betas = pred_res["betas"].size(1)
 
@@ -247,13 +276,22 @@ def process_meshes():
         optim_bm_str = f.readline().strip()
         optim_bm_path = optim_bm_str.split(" ")[1]
 
+    if not os.path.exists(optim_bm_path):
+        optim_bm_path = "/home/sid/Projects/humor/body_models/smplh/male/model.npz"
+
     # humor model
     pred_bm = BodyModel(bm_path=optim_bm_path, num_betas=num_pred_betas, batch_size=T).to(device)
 
     # run through SMPL
     pred_body = run_smpl(pred_res, pred_bm)
+    return pred_body
+
+
+def transform_meshes():
+    # Apply extrinsic transformation to the meshes to get from camera frames of kinect to omni
+    pred_body = get_meshes(results_folder)
     print("[*] Loaded the sequence of SMPL models!")
-    if not use_opencv:
+    if use_matlab:
         transform = get_transformation_matrix_matlab()
     else:
         transform = get_transformation_matrix_opencv()
@@ -262,12 +300,13 @@ def process_meshes():
 
 
 def main():
-    # To render the projected meshes on the images
-    transformed_meshes = process_meshes()
+    # To transform the meshes using extrinsic parameters
+    transformed_meshes = transform_meshes()
     with open(omni_intrinsics_file, "rb") as f:
         omni_params = pickle.load(f)
 
-    vertices_2d, mesh = project_meshes(cam1_images_path, transformed_meshes, omni_params, output_path)
+    projected_vertices, transformed_meshes = project_meshes(cam1_images_path, transformed_meshes, omni_params, output_path)
+    save_projected_meshes(transformed_meshes, projected_vertices, output_path)
 
 
 if __name__ == "__main__":
@@ -286,18 +325,17 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--use-opencv",
+        "--use-matlab",
         action="store_true",
         dest="use_opencv",
-        default=True,
+        default=False,
         help="Use matrices from OpenCV",
     )
-
 
     args = parser.parse_args()
     root = args.root
     omni_intrinsics_file = args.omni_intrinsics
-    use_opencv = args.use_opencv
+    use_matlab = args.use_matlab
 
     # Define derivations relative to the basepath
     cam1_images_path = f"{root}/omni"
@@ -305,16 +343,26 @@ if __name__ == "__main__":
     capture_dir = f"{root}/capture{n}/rgb"
     sync_file = f"{root}/synced_filenames_full.txt"
     results_folder = f"{root}/capture{n}/out_capture{n}/results_out/final_results"
-    output_path = f"{root}/capture{n}/out_capture{n}/results_out/reprojected"
+    output_path = f"{root}/capture{n}/out_capture{n}/reprojected"
 
+<<<<<<< HEAD
     calib_dir = f"/home/sid/Projects/OmniScience/mount-NAS/kinect-omni-ego/2024-01-12/at-unis/lab/calib/extrinsics/k{n}-extrinsics"
     # calib_dir = f"/home/sid/Projects/OmniScience/mount-NAS/kinect-omni-ego/2022-08-11/at-a01/living-room/calib/k{n}-omni"
     if use_opencv:
         cam0_to_world_pth = f"{calib_dir}/capture{n}/k{n}_rgb_cam_to_world.pkl"
         world_to_cam1_pth = f"{calib_dir}/k{n}_omni_world_to_cam.pkl"
+=======
+    # calib_dir = f"/home/sid/Projects/OmniScience/mount-NAS/kinect-omni-ego/2024-01-12/at-unis/lab/calib/extrinsics/k{n}-extrinsics"
+    calib_dir = f"/home/sid/Projects/OmniScience/mount-NAS/kinect-omni-ego/2022-08-11/at-a01/living-room/calib/k{n}-omni"
+>>>>>>> 2c4d0adf6b356dc9f0eb4a5cb2d114324e2dd5b9
 
-    else:
+    if use_matlab:
         kinect_jsonpath = f"{calib_dir}/k{n}Params.json"
         omni_jsonpath = f"{root}/omni{n}Params.json"
+
+
+    else:
+        cam0_to_world_pth = f"{calib_dir}/capture{n}/k{n}_rgb_cam_to_world.pkl"
+        world_to_cam1_pth = f"{calib_dir}/k{n}_omni_world_to_cam.pkl"
 
     main()

@@ -14,6 +14,21 @@ import torch
 import lightning as pl
 from lightning.fabric import Fabric
 
+# TODO - This is a stub, need to implement the actual dataloader
+# Make a dataloader
+def make_dataloader():
+    # Create a dataset
+    dataset = torch.utils.data.TensorDataset(
+        torch.randn(100, 10), torch.randint(0, 2, (100, ))
+    )
+
+    # Create a dataloader
+    dataloader = torch.utils.data.DataLoader(
+        dataset, batch_size=32, shuffle=True
+    )
+
+    return dataloader
+
 if __name__ == "__main__":
     # Create a model
     model = Fabric()
