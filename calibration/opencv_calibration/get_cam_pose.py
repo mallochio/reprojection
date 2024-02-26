@@ -68,7 +68,8 @@ def get_cam_pose(
     # Find the chess board corners
     ret, corners = cv.findChessboardCorners(img, grid_size)
     if not ret:
-        raise Exception("Could not find the chessboard!")
+        print(f"-> [{img_path}]: Could not find the chessboard!")
+        # raise Exception("Could not find the chessboard!")
     
     print(f"-> [{img_path}]: Found the chessboard!")
     # Refine them

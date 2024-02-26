@@ -229,7 +229,7 @@ def process_meshes():
     if not os.path.isfile(res_file):
         raise Exception(f"Could not find {res_file}!")
 
-    device = torch.device("cpu")
+    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     pred_res = np.load(res_file)
     T = pred_res["trans"].shape[0]
 
@@ -276,7 +276,7 @@ if __name__ == "__main__":
         "--root", 
         type=str, 
         help="Root directory of the dataset", 
-        default="/home/sid/Projects/OmniScience/mount-NAS/kinect-omni-ego/2022-08-11/at-a01/living-room/a01"
+        default="/home/sid/Projects/OmniScience/mount-NAS/kinect-omni-ego/2024-01-12/at-unis/lab/sid/"
     )
     parser.add_argument(
         "--omni_intrinsics", 
@@ -301,14 +301,14 @@ if __name__ == "__main__":
 
     # Define derivations relative to the basepath
     cam1_images_path = f"{root}/omni"
-    n = 0 # kinect number
+    n = 2 # kinect number
     capture_dir = f"{root}/capture{n}/rgb"
     sync_file = f"{root}/synced_filenames_full.txt"
     results_folder = f"{root}/capture{n}/out_capture{n}/results_out/final_results"
     output_path = f"{root}/capture{n}/out_capture{n}/results_out/reprojected"
 
-    # calib_dir = f"/home/sid/Projects/OmniScience/mount-NAS/kinect-omni-ego/2024-01-12/at-unis/lab/calib/extrinsics/k{n}-extrinsics"
-    calib_dir = f"/home/sid/Projects/OmniScience/mount-NAS/kinect-omni-ego/2022-08-11/at-a01/living-room/calib/k{n}-omni"
+    calib_dir = f"/home/sid/Projects/OmniScience/mount-NAS/kinect-omni-ego/2024-01-12/at-unis/lab/calib/extrinsics/k{n}-extrinsics"
+    # calib_dir = f"/home/sid/Projects/OmniScience/mount-NAS/kinect-omni-ego/2022-08-11/at-a01/living-room/calib/k{n}-omni"
     if use_opencv:
         cam0_to_world_pth = f"{calib_dir}/capture{n}/k{n}_rgb_cam_to_world.pkl"
         world_to_cam1_pth = f"{calib_dir}/k{n}_omni_world_to_cam.pkl"
