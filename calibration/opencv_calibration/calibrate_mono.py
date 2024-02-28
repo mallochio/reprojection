@@ -71,12 +71,15 @@ def calibrate_cam(
         file = os.path.join(files_path, file_name)
         if os.path.isfile(file):
             img = cv.cvtColor(cv.imread(file), cv.COLOR_BGR2GRAY)
+            # img = cv.adaptiveThreshold(img, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 11, 2)
             if img_shape is None:
                 img_shape = img.shape
             # Find the chess board corners
             ret, corners = cv.findChessboardCorners(
                 img,
                 grid_size,
+                # None,
+                # cv.CALIB_CB_ADAPTIVE_THRESH + cv.CALIB_CB_NORMALIZE_IMAGE + cv.CALIB_CB_FAST_CHECK
             )
             print(f"-> Image {file_name} - Corners found: {ret}")
             # If found, add object points, image points (after refining them)
