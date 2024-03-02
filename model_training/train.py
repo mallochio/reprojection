@@ -12,13 +12,15 @@
 
 import os
 import pytorch_lightning as pl
-from pytorch_lightning.fabric import Fabric
+from pytorch_lightning import Trainer
 import torch
 import torch.nn as nn
 import numpy as np
 import torchvision.transforms as T
 from torchvision import models
 from PIL import Image
+import smplx
+import trimesh
 
 
 def load_image(image_path):
@@ -41,60 +43,66 @@ def calculate_pose_smoothness(output_poses):
     smoothness_loss = torch.mean(torch.norm(output_poses[:-1] - output_poses[1:], dim=(1, 2))) 
     return smoothness_loss
 
-
-def calculate_loss(output_poses, target_poses):
-    # Assuming your SMPL-H parameter order is standard
-    body_pose_loss = nn.L1Loss(reduction='mean')(output_poses[:, :72], target_poses[:, :72])
-    body_shape_loss = nn.MSELoss(reduction='mean')(output_poses[:, 72:82], target_poses[:, 72:82])
-    left_hand_loss = nn.L1Loss(reduction='mean')(output_poses[:, 82:117], target_poses[:, 82:117])
-    right_hand_loss = nn.L1Loss(reduction='mean')(output_poses[:, 117:152], target_poses[:, 117:152])
-    face_loss = nn.L1Loss(reduction='mean')(output_poses[:, 152:], target_poses[:, 152:]) 
-
-    total_loss = body_pose_loss + body_shape_loss + left_hand_loss + right_hand_loss + face_loss 
-    return total_loss
-
-
 class PoseDataset(torch.utils.data.Dataset):
-    def __init__(self, image_paths, pose_paths):
-        self.image_paths = image_paths
-        self.pose_paths = pose_paths
+    def __init__(self, image_dir, pose_dir, mesh_dir):
+        self.image_dir = image_dir
+        self.pose_dir = pose_dir
+        self.mesh_dir = mesh_dir
+        self.image_paths = os.listdir(image_dir)
 
     def __len__(self):
         return len(self.image_paths)
 
     def __getitem__(self, index):
-        image_path = self.image_paths[index]
+        image_path = os.path.join(self.image_dir, self.image_paths[index])
         image = load_image(image_path)  
 
-        poses = np.load(self.pose_paths[index])
-        camera_pose = poses['camera']
-        canonical_pose = poses['canonical']
-        return image, camera_pose, canonical_pose
+        pose_path = os.path.join(self.pose_dir, self.image_paths[index]).replace('.jpg', '.npy')  
+        poses = np.load(pose_path)
 
+        betas = torch.from_numpy(poses['betas']).float()  
+        canonical_pose = torch.from_numpy(poses['pose']).float() 
+        camera_pose = torch.from_numpy(poses['camera']).float()
+
+        target_mesh_path = os.path.join(self.mesh_dir, self.image_paths[index]).replace('.jpg', '.obj')  
+        target_mesh = trimesh.load(target_mesh_path)
+        target_mesh = smplx.from_trimesh(target_mesh, model_type='smplh', gender='neutral')   
+
+        return image, betas, camera_pose, canonical_pose, target_mesh  
 
 class PoseEstimationModule(pl.LightningModule):
-    def __init__(self, learning_rate=1e-4):
+    def __init__(self, learning_rate=1e-4, smpl_model_path='path/to/smplh/model.pkl'):
         super().__init__()
-        self.backbone = models.resnet18(pretrained=True)  # Or any ResNet variant
+        self.backbone = models.resnet18(pretrained=True) 
+        self.backbone = nn.Sequential(*list(self.backbone.children())[:-1])  
+        self.smpl = smplx.create(smpl_model_path, model_type='smplh', gender='neutral') 
+        num_pose_parameters = 63 # 3 parameters per body joint x 21 body joints For the body pose (make it 63+3 to add global orientation)
 
-        # Remove the last fully connected layer of ResNet
-        self.backbone = nn.Sequential(*list(self.backbone.children())[:-1]) 
+        self.mesh_regressor = nn.Sequential(
+             nn.Linear(512, 256),
+             nn.ReLU(),
+             nn.Linear(256, self.smpl.num_betas) 
+        )
 
         self.output_head = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(512, 256),  # Adjust based on ResNet's output features
+            nn.Linear(512, 256), 
             nn.ReLU(),
-            nn.Linear(256, num_pose_parameters)  # Output SMPL parameters
+            nn.Linear(256, num_pose_parameters)  # Replace num_pose_parameters
         )
         self.learning_rate = learning_rate
 
-    def forward(self, images, camera_pose, canonical_pose):
+    def forward(self, images, betas, camera_pose, canonical_pose):
         features = self.backbone(images)
-        # Optionally concatenate features with pose embeddings
-        combined_features = torch.cat([features, camera_pose, canonical_pose], dim=1) 
-        output_poses = self.output_head(combined_features)
-        return output_poses
+        betas = self.mesh_regressor(features)
 
+        output_mesh = self.smpl(betas=betas, 
+                                global_orient=camera_pose[:, :3], 
+                                pose2rot=False)  
+
+        combined_features = torch.cat([features, betas, camera_pose, canonical_pose], dim=1) 
+        output_poses = self.output_head(combined_features)
+        return output_poses, output_mesh
 
     def training_step(self, batch, batch_idx):
         images, camera_poses, canonical_poses, target_poses = batch
@@ -107,18 +115,23 @@ class PoseEstimationModule(pl.LightningModule):
         return torch.optim.Adam(self.parameters(), lr=self.learning_rate)
 
 
+def calculate_loss(output_poses, target_poses, output_mesh, target_mesh):
+    body_pose_loss = nn.L1Loss(reduction='mean')(output_poses[:, 3:66], target_poses[:, 3:66])  
+    body_shape_loss = nn.MSELoss(reduction='mean')(output_poses[:, 66:4328], target_poses[:, 66:4328]) 
+    mesh_loss = nn.L1Loss(reduction='mean')(output_mesh.vertices, target_mesh.vertices)
+    
+    total_loss = body_pose_loss + body_shape_loss + mesh_loss
+    return total_loss
+
+
 if __name__ == "__main__":
-    # Example dataset setup
     DATASET_PATH = "path/to/dataset"
     POSE_PATH = "path/to/pose"
+    MESH_PATH = "path/to/meshes" 
 
-    image_paths = os.listdir(DATASET_PATH)
-    pose_path = POSE_PATH
-    dataset = PoseDataset(image_paths, pose_path)
+    dataset = PoseDataset(DATASET_PATH, POSE_PATH, MESH_PATH)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=4, shuffle=True)
 
     model = PoseEstimationModule()
-    fabric = Fabric(accelerator="gpu", devices=2)
-    trainer = pl.Trainer(fabric=fabric, max_epochs=10, ...)  # Add other trainer args
-
+    trainer = Trainer(max_epochs=10, gpus=1)  
     trainer.fit(model, dataloader)
