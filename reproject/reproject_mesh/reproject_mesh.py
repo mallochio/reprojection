@@ -69,7 +69,8 @@ def render_mesh(img, img_path, mesh, vertices_2d, output_dir=None):
         draw.polygon(
             [tuple(p[0]) for p in face_vertices],
             fill=None,
-            outline="red",
+            outline="gray",
+            # outline="black",
             width=1,
         )
     # Save the image
@@ -258,7 +259,7 @@ def get_meshes(results_folder: str):
     if not os.path.isfile(res_file):
         raise Exception(f"Could not find {res_file}!")
 
-    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    device = torch.device("cuda:1") if torch.cuda.is_available() else torch.device("cpu")
     pred_res = np.load(res_file)
     T = pred_res["trans"].shape[0]
 
@@ -277,7 +278,7 @@ def get_meshes(results_folder: str):
         optim_bm_path = optim_bm_str.split(" ")[1]
 
     if not os.path.exists(optim_bm_path):
-        optim_bm_path = "/home/sid/Projects/humor/body_models/smplh/male/model.npz"
+        optim_bm_path = "/home/sid/Projects/OmniScience/other/humor/body_models/smplh/male/model.npz"
 
     # humor model
     pred_bm = BodyModel(bm_path=optim_bm_path, num_betas=num_pred_betas, batch_size=T).to(device)
@@ -315,8 +316,10 @@ if __name__ == "__main__":
         "--root", 
         type=str, 
         help="Root directory of the dataset", 
-        default="/home/sid/Projects/OmniScience/mount-NAS/kinect-omni-ego/2024-01-12/at-unis/lab/sid/"
+        default="/home/sid/Projects/OmniScience/mount-NAS/kinect-omni-ego/2022-10-07/at-a02/bedroom/a03" # 2023-01-20/at-a06/kitchen/a06 
+        # default="/home/sid/Projects/OmniScience/mount-NAS/kinect-omni-ego/2024-01-12/at-unis/lab/sid"
     )
+
     parser.add_argument(
         "--omni_intrinsics", 
         type=str, 
@@ -327,9 +330,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--use-matlab",
         action="store_true",
-        dest="use_opencv",
         default=False,
         help="Use matrices from OpenCV",
+    )
+
+    parser.add_argument(
+        "--partial-meshes",
+        action="store_true",
+        default=False,
     )
 
     args = parser.parse_args()
@@ -338,28 +346,23 @@ if __name__ == "__main__":
     use_matlab = args.use_matlab
 
     # Define derivations relative to the basepath
+    n = 0 # kinect number
     cam1_images_path = f"{root}/omni"
-    n = 2 # kinect number
     capture_dir = f"{root}/capture{n}/rgb"
     sync_file = f"{root}/synced_filenames_full.txt"
-    results_folder = f"{root}/capture{n}/out_capture{n}/results_out/final_results"
     output_path = f"{root}/capture{n}/out_capture{n}/reprojected"
 
-<<<<<<< HEAD
-    calib_dir = f"/home/sid/Projects/OmniScience/mount-NAS/kinect-omni-ego/2024-01-12/at-unis/lab/calib/extrinsics/k{n}-extrinsics"
-    # calib_dir = f"/home/sid/Projects/OmniScience/mount-NAS/kinect-omni-ego/2022-08-11/at-a01/living-room/calib/k{n}-omni"
-    if use_opencv:
-        cam0_to_world_pth = f"{calib_dir}/capture{n}/k{n}_rgb_cam_to_world.pkl"
-        world_to_cam1_pth = f"{calib_dir}/k{n}_omni_world_to_cam.pkl"
-=======
-    # calib_dir = f"/home/sid/Projects/OmniScience/mount-NAS/kinect-omni-ego/2024-01-12/at-unis/lab/calib/extrinsics/k{n}-extrinsics"
-    calib_dir = f"/home/sid/Projects/OmniScience/mount-NAS/kinect-omni-ego/2022-08-11/at-a01/living-room/calib/k{n}-omni"
->>>>>>> 2c4d0adf6b356dc9f0eb4a5cb2d114324e2dd5b9
+        
+    results_folder = f"{root}/capture{n}/out_capture{n}/results_out/final_results"
+    if args.partial_meshes:
+        results_folder = f"{root}/out_capture{n}/results_out"
 
+    # calib_dir = f"/home/sid/Projects/OmniScience/mount-NAS/kinect-omni-ego/2024-01-12/at-unis/lab/calib/extrinsics/k{n}-extrinsics"
+    calib_dir = f"{os.path.dirname(root)}/calib/k{n}-omni"
+    
     if use_matlab:
         kinect_jsonpath = f"{calib_dir}/k{n}Params.json"
-        omni_jsonpath = f"{root}/omni{n}Params.json"
-
+        omni_jsonpath = f"{calib_dir}/omni{n}Params.json"
 
     else:
         cam0_to_world_pth = f"{calib_dir}/capture{n}/k{n}_rgb_cam_to_world.pkl"
