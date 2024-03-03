@@ -116,12 +116,10 @@ class PoseEstimationModule(pl.LightningModule):
 
 
 def calculate_loss(output_poses, target_poses, output_mesh, target_mesh):
-    body_pose_loss = nn.L1Loss(reduction='mean')(output_poses[:, 3:66], target_poses[:, 3:66])  
-    body_shape_loss = nn.MSELoss(reduction='mean')(output_poses[:, 66:4328], target_poses[:, 66:4328]) 
+    body_pose_loss = nn.L1Loss(reduction='mean')(output_poses[:, 3:66], target_poses[:, 3:66])
+    body_shape_loss = nn.MSELoss(reduction='mean')(output_poses[:, 66:4328], target_poses[:, 66:4328])
     mesh_loss = nn.L1Loss(reduction='mean')(output_mesh.vertices, target_mesh.vertices)
-    
-    total_loss = body_pose_loss + body_shape_loss + mesh_loss
-    return total_loss
+    return body_pose_loss + body_shape_loss + mesh_loss
 
 
 if __name__ == "__main__":
