@@ -26,7 +26,7 @@ from fitting.eval_utils import SMPL_SIZES
 from utils.torch import copy2cpu as c2c
 
 # from reprojection
-from humor_inference.reproject_humor_sequence import make_44, transform_SMPL_sequence, get_camera_params,sanitize_preds
+from humor_inference.reproject_humor_sequence import make_44, transform_SMPL_sequence, get_camera_params, sanitize_preds
 import cv2
 import pickle
 import trimesh
@@ -36,7 +36,9 @@ from typing import List
 from PIL import Image, ImageDraw, ImageOps
 from tqdm import tqdm
 import pandas as pd
+from pycocotools.coco import COCO 
 from pathlib import Path
+from create_dataset import save_dataset_files
 
 
 def get_synced_meshes(transformed_meshes: List[trimesh.Trimesh]):
@@ -85,23 +87,11 @@ def render_mesh(img, img_path, mesh, vertices_2d, output_dir=None):
     return img
 
 
-def save_projected_meshes(
-        meshes: List[trimesh.Trimesh],
-        vertices_2d_list: List[np.ndarray],
-        output_dir: str
-    ):
-    # Save the meshes that have undergone perspective projection in the original format
-    for i, (mesh, vertices_2d) in enumerate(zip(meshes, vertices_2d_list)):
-        mesh.vertices = vertices_2d
-        mesh.export(os.path.join(output_dir, f"{i:06d}.obj"))    
-    return
-
-
 def project_meshes(
     images_dir: str,
     mesh_seq: List[trimesh.Trimesh],
     camera_calib: dict,
-    output_dir: str,
+    render: bool = True,
 ):
     """
     Project the mesh sequence on the (omni) images.
@@ -129,6 +119,7 @@ def project_meshes(
 
     # Object to save all meshes and projected vertices
     projected_vertices = []
+    print("[*] Projecting the meshes on the images - Press 'q' to quit!")
     for i, (mesh, img_path) in tqdm(enumerate(zip(mesh_seq, images)), total=len(images)):
         img = Image.open(img_path)
         assert (img.size[1], img.size[0]) == camera_calib[
@@ -147,15 +138,13 @@ def project_meshes(
             vertices_2d = vertices_2d.swapaxes(0, 1)
 
         else:
-            vertices_2d, _ = cv2.projectPoints(
-                mesh.vertices, np.zeros(3), np.zeros(3), camera_matrix, dist_coeffs
-            )
+            vertices_2d, _ = cv2.projectPoints(mesh.vertices, np.zeros(3), np.zeros(3), camera_matrix, dist_coeffs)
+        if render:
+            img = render_mesh(img, img_path, mesh, vertices_2d)
 
-        img = render_mesh(img, img_path, mesh, vertices_2d)
         projected_vertices.append(vertices_2d)
 
     cv2.destroyAllWindows()
-    print("[*] Done!")
     return projected_vertices, mesh_seq
 
 
@@ -297,7 +286,8 @@ def transform_meshes():
     else:
         transform = get_transformation_matrix_opencv()
     print("[*] Applying the transform to the SMPL models sequence...")
-    return transform_SMPL_sequence(pred_body, transform)
+    transformed_meshes = transform_SMPL_sequence(pred_body, transform)
+    return transformed_meshes
 
 
 def main():
@@ -306,8 +296,8 @@ def main():
     with open(omni_intrinsics_file, "rb") as f:
         omni_params = pickle.load(f)
 
-    projected_vertices, transformed_meshes = project_meshes(cam1_images_path, transformed_meshes, omni_params, output_path)
-    save_projected_meshes(transformed_meshes, projected_vertices, output_path)
+    projected_vertices, transformed_meshes = project_meshes(cam1_images_path, transformed_meshes, omni_params, render=render_meshes)
+    save_dataset_files(projected_vertices, transformed_meshes, output_path)
 
 
 if __name__ == "__main__":
@@ -316,8 +306,7 @@ if __name__ == "__main__":
         "--root", 
         type=str, 
         help="Root directory of the dataset", 
-        default="/home/sid/Projects/OmniScience/mount-NAS/kinect-omni-ego/2022-10-07/at-a02/bedroom/a03" # 2023-01-20/at-a06/kitchen/a06 
-        # default="/home/sid/Projects/OmniScience/mount-NAS/kinect-omni-ego/2024-01-12/at-unis/lab/sid"
+        default="/home/sid/Projects/OmniScience/mount-NAS/kinect-omni-ego/2024-01-12/at-unis/lab/sid"
     )
 
     parser.add_argument(
@@ -326,27 +315,30 @@ if __name__ == "__main__":
         help="Path to the omni intrinsics file", 
         default="/home/sid/Projects/OmniScience/code/reprojection/calibration/intrinsics/omni_calib.pkl"
     )
-
     parser.add_argument(
         "--use-matlab",
         action="store_true",
         default=False,
-        help="Use matrices from OpenCV",
+        help="Use matrices from MATLAB instead of OpenCV",
     )
-
     parser.add_argument(
         "--partial-meshes",
         action="store_true",
         default=False,
+    )   
+    parser.add_argument(
+        "--render",
+        action="store_true",
+        default=False,
     )
-
     args = parser.parse_args()
     root = args.root
     omni_intrinsics_file = args.omni_intrinsics
     use_matlab = args.use_matlab
+    render_meshes = args.render
 
     # Define derivations relative to the basepath
-    n = 0 # kinect number
+    n = 2 # kinect number
     cam1_images_path = f"{root}/omni"
     capture_dir = f"{root}/capture{n}/rgb"
     sync_file = f"{root}/synced_filenames_full.txt"
@@ -357,9 +349,7 @@ if __name__ == "__main__":
     if args.partial_meshes:
         results_folder = f"{root}/out_capture{n}/results_out"
 
-    # calib_dir = f"/home/sid/Projects/OmniScience/mount-NAS/kinect-omni-ego/2024-01-12/at-unis/lab/calib/extrinsics/k{n}-extrinsics"
     calib_dir = f"{os.path.dirname(root)}/calib/k{n}-omni"
-    
     if use_matlab:
         kinect_jsonpath = f"{calib_dir}/k{n}Params.json"
         omni_jsonpath = f"{calib_dir}/omni{n}Params.json"
