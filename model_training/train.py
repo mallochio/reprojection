@@ -7,10 +7,10 @@
 @Version :   1.0
 @Contact :   siddharth.ravi@ua.es
 @License :   (C)Copyright 2022-2023, Siddharth Ravi, Distributed under terms of the MIT license
-@Desc    :   Script to train the model using torch (TODO - This is a stub, needs to be filled in)
+@Desc    :   Script to train the model using torch (TODO - This is a stub, needs to be` filled in)
 '''
-
 import os
+import json
 import pytorch_lightning as pl
 from pytorch_lightning import Trainer
 import torch
@@ -21,6 +21,7 @@ from torchvision import models
 from PIL import Image
 import smplx
 import trimesh
+import argparse
 
 
 def load_image(image_path):
@@ -37,41 +38,46 @@ def apply_image_transformations(image):
     ])
     return transform(image)
 
-
 def calculate_pose_smoothness(output_poses):
     # Simple temporal smoothness - difference between consecutive frames
     smoothness_loss = torch.mean(torch.norm(output_poses[:-1] - output_poses[1:], dim=(1, 2))) 
     return smoothness_loss
 
 class PoseDataset(torch.utils.data.Dataset):
-    def __init__(self, image_dir, pose_dir, mesh_dir):
-        self.image_dir = image_dir
-        self.pose_dir = pose_dir
-        self.mesh_dir = mesh_dir
-        self.image_paths = os.listdir(image_dir)
+    def __init__(self, json_file, base_dir):
+        with open(json_file, 'r') as f:
+            self.data = json.load(f)
+        self.base_dir = base_dir
 
     def __len__(self):
-        return len(self.image_paths)
+        return len(self.data)
 
     def __getitem__(self, index):
-        image_path = os.path.join(self.image_dir, self.image_paths[index])
+        item = self.data[index]
+        image_folder = os.path.join(self.base_dir, item['omni'])
+        image_files = os.listdir(image_folder)
+        image_path = os.path.join(image_folder, image_files[0])  # Assuming the first image in the folder
         image = load_image(image_path)  
 
-        pose_path = os.path.join(self.pose_dir, self.image_paths[index]).replace('.jpg', '.npy')  
+        pose_folder = os.path.join(self.base_dir, item['pose'])
+        pose_files = os.listdir(pose_folder)
+        pose_path = os.path.join(pose_folder, pose_files[0])  # Assuming the first pose file in the folder
         poses = np.load(pose_path)
 
         betas = torch.from_numpy(poses['betas']).float()  
         canonical_pose = torch.from_numpy(poses['pose']).float() 
         camera_pose = torch.from_numpy(poses['camera']).float()
 
-        target_mesh_path = os.path.join(self.mesh_dir, self.image_paths[index]).replace('.jpg', '.obj')  
-        target_mesh = trimesh.load(target_mesh_path)
+        mesh_folder = os.path.join(self.base_dir, item['mesh'])
+        mesh_files = os.listdir(mesh_folder)
+        mesh_path = os.path.join(mesh_folder, mesh_files[0])  # Assuming the first mesh file in the folder
+        target_mesh = trimesh.load(mesh_path)
         target_mesh = smplx.from_trimesh(target_mesh, model_type='smplh', gender='neutral')   
 
         return image, betas, camera_pose, canonical_pose, target_mesh  
 
 class PoseEstimationModule(pl.LightningModule):
-    def __init__(self, learning_rate=1e-4, smpl_model_path='path/to/smplh/model.pkl'):
+    def __init__(self, learning_rate=1e-4, smpl_model_path='/raid/aml4aha/sid/humor/body_models/smplh/neutral/model.npz'):
         super().__init__()
         self.backbone = models.resnet18(pretrained=True) 
         self.backbone = nn.Sequential(*list(self.backbone.children())[:-1])  
@@ -105,9 +111,9 @@ class PoseEstimationModule(pl.LightningModule):
         return output_poses, output_mesh
 
     def training_step(self, batch, batch_idx):
-        images, camera_poses, canonical_poses, target_poses = batch
-        output_poses = self(images, camera_poses, canonical_poses)
-        loss = calculate_loss(output_poses, target_poses)  # Your loss function
+        images, betas, camera_poses, canonical_poses, target_meshes = batch
+        output_poses, output_mesh = self(images, betas, camera_poses, canonical_poses)
+        loss = calculate_loss(output_poses, canonical_poses, output_mesh, target_meshes)  # Your loss function
         self.log("train_loss", loss)
         return loss
 
@@ -123,11 +129,15 @@ def calculate_loss(output_poses, target_poses, output_mesh, target_mesh):
 
 
 if __name__ == "__main__":
-    DATASET_PATH = "path/to/dataset"
-    POSE_PATH = "path/to/pose"
-    MESH_PATH = "path/to/meshes" 
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--json-file", default=None, type=str, required=True)
+    parser.add_argument("--base-dir", default=None, type=str, required=True)
+    args = parser.parse_args()
 
-    dataset = PoseDataset(DATASET_PATH, POSE_PATH, MESH_PATH)
+    JSON_FILE = args.json_file
+    BASE_DIR = args.base_dir
+
+    dataset = PoseDataset(JSON_FILE, BASE_DIR)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=4, shuffle=True)
 
     model = PoseEstimationModule()

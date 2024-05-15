@@ -14,7 +14,7 @@ import sys
 import logging
 import subprocess
 
-ROOT_DIR = "/openpose/data/NAS-mountpoint/kinect-omni-ego/2023-02-09"
+ROOT_DIR = "/openpose/data/dataset/out-2022-10-14"
 
 # Configure logging
 logging.basicConfig(level=logging.INFO,
@@ -29,8 +29,8 @@ python_executable = sys.executable
 def main():
     for root, dirs, files in os.walk(ROOT_DIR):
         n = os.path.basename(root)[-1]
-        if "rgb" in dirs and "calib" not in root and f"out_capture{n}" in dirs and not os.path.exists(f"{root}/out_capture{n}/results_out"):
-            command = f"{python_executable} humor/fitting/run_fitting_sid.py @./configs/fit_rgb_demo_use_split_looped.cfg --data-path {root}/rgb --out {root}/out_capture{n} --rgb-intrinsics /openpose/data/reprojection/calibration/intrinsics/k{n}_rgb_calib.json"
+        if "calib" not in root and f"out_capture{n}" in dirs and not os.path.exists(f"{root}/out_capture{n}/results_out"):
+            command = f"{python_executable} humor/fitting/run_fitting.py @./configs/fit_rgb_demo_use_split_looped.cfg --data-path {root}/out_capture{n}/rgb_preprocess/raw_frames --out {root}/out_capture{n} --rgb-intrinsics /openpose/data/reprojection/calibration/intrinsics/k{n}_rgb_calib.json"
             logger.info(command)
             print(command)
             result = subprocess.run(command, shell=True, capture_output=True, text=True)
