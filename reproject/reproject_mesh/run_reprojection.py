@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 '''
-@File    :   reproject_mesh.py
+@File    :   run_reprojection.py
 @Time    :   2024/02/09 11:04:09
 @Author  :   Siddharth Ravi
 @Version :   1.0
