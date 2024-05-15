@@ -114,7 +114,7 @@ def process_activities_file(file_path):
             if len(data) == 4:
                 start_timestamp, end_timestamp, activity_type, activity_name = data
                 start_timestamp = get_closest_omni(int(start_timestamp), synced_filenames)
-                end_timestamp = get_closest_omni(int(end_timestamp), scopilotynced_filenames)
+                end_timestamp = get_closest_omni(int(end_timestamp), synced_filenames)
 
                 activity_segments.append({
                     "start_timestamp": int(start_timestamp),
@@ -129,7 +129,6 @@ def process_activities_file(file_path):
 if __name__ == "__main__":
     # Create the parser
     parser = argparse.ArgumentParser(description="Process a dataset")
-    parser.
     parser.add_argument('dataset_path', type=str, help='The path to the dataset')
 
     args = parser.parse_args()
