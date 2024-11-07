@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-Reproject WHAM pose estimation outputs to camera 1 using world coordinates.
+Reproject WHAM pose estimation outputs to omni camera using world coordinates.
 Enhanced version with improved synchronization and debugging capabilities.
 """
 
@@ -50,9 +50,11 @@ from reproject.reproject_mesh.reprojection_utils import (
     get_transformation_matrix_matlab,
 )
 
+BM_PATH = "/home/sid/Projects/humor/body_models/smplh/male/model.npz"
+
 
 class MeshSynchronizer:
-    """Handles mesh synchronization between different camera views."""
+    """Handles mesh synchronization between different camera    views."""
     
     def __init__(self, sync_file: str, capture_dir: str):
         self.sync_file = sync_file
@@ -72,42 +74,38 @@ class MeshSynchronizer:
     def get_synced_meshes(self, transformed_meshes: Dict[int, List[trimesh.Trimesh]], n: int = 0) -> Tuple[List, Dict]:
         """
         Get synchronized meshes and corresponding camera files.
-        Args:
-            transformed_meshes: List of transformed mesh objects
-            n: Camera index
-        Returns:
-            Tuple containing synced camera files and mesh dictionary
         """
         capture_files = sorted([f for f in os.listdir(self.capture_dir) 
                               if f.endswith(('.png', '.jpg'))])
         
-        mesh_indices = []
+        # Create mapping of omni filenames to mesh indices
+        synced_pairs = []
         transformed_meshes_dict = {}
-        
-        # Create mapping of capture filenames to indices
-        capture_file_map = {filename: idx for idx, filename in enumerate(capture_files)}
         
         for _, row in self.sync_data.iterrows():
             capture_file = row[f"capture{n}"]
-            if capture_file in capture_file_map:
-                mesh_index = capture_file_map[capture_file]
-                if mesh_index < len(transformed_meshes) and mesh_index in transformed_meshes:
-                    if mesh_index not in transformed_meshes_dict:
-                        transformed_meshes_dict[mesh_index] = transformed_meshes[mesh_index]
-                    else:
-                        transformed_meshes_dict[mesh_index].extend(transformed_meshes[mesh_index])
-                    mesh_indices.append([mesh_index, row["omni"]])
+            omni_file = row["omni"]
+            
+            if capture_file in capture_files:
+                mesh_idx = capture_files.index(capture_file)
+                if mesh_idx in transformed_meshes:
+                    transformed_meshes_dict[mesh_idx] = transformed_meshes[mesh_idx]
+                    synced_pairs.append((omni_file, mesh_idx))
         
-        synced_cam1_files = [i[1] for i in mesh_indices]
+        # Sort by omni filename to maintain temporal order
+        synced_pairs.sort(key=lambda x: x[0])
+        synced_omni_files = [pair[0] for pair in synced_pairs]
+        ordered_mesh_dict = {idx: transformed_meshes_dict[pair[1]] 
+                           for idx, pair in enumerate(synced_pairs)}
         
-        logger.info(f"Synchronized {len(synced_cam1_files)} meshes with camera files")
-        return synced_cam1_files, transformed_meshes_dict
+        logger.info(f"Synchronized {len(synced_omni_files)} meshes with camera files")
+        return synced_omni_files, ordered_mesh_dict
 
 
 class MeshProcessor:
     """Handles mesh processing and transformation operations."""
 
-    def __init__(self, device: torch.device = None):
+    def __init__(self, device: Optional[torch.device] = None):
         self.device = device or torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     def get_wham_mesh_sequence(self, wham_output, betas, device):
@@ -144,15 +142,15 @@ class MeshProcessor:
 
             # Initialize the BodyModel with world parameters for the current sequence
             pred_bm = BodyModel(
-                bm_path="/home/sid/Projects/humor/body_models/smplh/male/model.npz",
+                bm_path=BM_PATH,
                 num_betas=num_betas,
                 batch_size=T,
                 model_type="smplh"  # Adjust based on your model type
             ).to(device)
 
             # Construct the meshes directly from WHAM vertices
-            faces = pred_bm.bm.faces_tensor  # Assuming same faces as HUMOR
-            faces = c2c(faces)  # Convert to NumPy
+            faces = pred_bm.bm.faces_tensor 
+            faces = c2c(faces)  # Converts to NumPy
 
             try:
                 wham_meshes = [
@@ -180,6 +178,32 @@ class MeshProcessor:
             }
 
         return sequences
+    
+    def sanitize_predictions(self, pred_res: Dict, T: int) -> Dict:
+        """Sanitize WHAM predictions by handling NaN and infinite values."""
+        for key, size in {"trans_world": 3, "betas": 10, "pose_world": 72}.items():
+            if key not in pred_res:
+                logger.warning(f"Key '{key}' not found in predictions")
+                continue
+
+            data = np.array(pred_res[key], dtype=np.float32)
+            invalid_mask = ~np.isfinite(data)
+
+            if np.any(invalid_mask):
+                logger.warning(f"Found invalid values in {key}")
+                if key == "betas":
+                    data[invalid_mask] = 0.0
+                else:
+                    for t in range(T):
+                        if np.all(invalid_mask[t]):
+                            data[t] = 0.0
+                        elif np.any(invalid_mask[t]):
+                            valid_data = data[t][~invalid_mask[t]]
+                            data[t][invalid_mask[t]] = np.nanmedian(valid_data) if valid_data.size > 0 else 0.0
+                
+                pred_res[key] = data
+
+        return pred_res
 
     def load_meshes(self, results_folder: str) -> Dict:
         """Load WHAM mesh predictions from results folder."""
@@ -193,7 +217,6 @@ class MeshProcessor:
     
         sanitized_output = {}
         betas_dict = {}
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         logger.info("Sanitizing WHAM output")
         for seq_idx, seq_data in tqdm(wham_output.items()):
             sanitized_data = self.sanitize_predictions(
@@ -204,9 +227,8 @@ class MeshProcessor:
             verts, betas, _ = self.get_wham_parameters(sanitized_data)
             betas_dict[seq_idx] = betas
 
-
         logger.info(f"Collating WHAM meshes for {len(sanitized_output)} sequences")
-        wham_meshes = self.get_wham_mesh_sequence(sanitized_output, betas_dict, device)
+        wham_meshes = self.get_wham_mesh_sequence(sanitized_output, betas_dict, self.device)
         aggregated_meshes = {}
         for seq_idx, seq_mesh_data in wham_meshes.items():
             for frame_id, mesh in zip(seq_mesh_data['frame_ids'], seq_mesh_data['wham_meshes']):
@@ -234,32 +256,6 @@ class MeshProcessor:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         return verts, betas, device
 
-    def sanitize_predictions(self, pred_res: Dict, T: int) -> Dict:
-        """Sanitize WHAM predictions by handling NaN and infinite values."""
-        for key, size in {"trans_world": 3, "betas": 10, "pose_world": 72}.items():
-            if key not in pred_res:
-                logger.warning(f"Key '{key}' not found in predictions")
-                continue
-
-            data = np.array(pred_res[key], dtype=np.float32)
-            invalid_mask = ~np.isfinite(data)
-
-            if np.any(invalid_mask):
-                logger.warning(f"Found invalid values in {key}")
-                if key == "betas":
-                    data[invalid_mask] = 0.0
-                else:
-                    for t in range(T):
-                        if np.all(invalid_mask[t]):
-                            data[t] = 0.0
-                        elif np.any(invalid_mask[t]):
-                            valid_data = data[t][~invalid_mask[t]]
-                            data[t][invalid_mask[t]] = np.nanmedian(valid_data) if valid_data.size > 0 else 0.0
-                
-                pred_res[key] = data
-
-        return pred_res
-
     def transform_meshes(self, pred_bodies: Dict[int, List[trimesh.Trimesh]], transform_matrix: np.ndarray) -> Dict[int, List[trimesh.Trimesh]]:
         """Transform meshes from Kinect to Omni camera frame."""
         transformed_meshes = {}
@@ -275,6 +271,7 @@ class MeshProcessor:
                     logger.error(f"Error transforming mesh: {str(e)}")
                     continue
         return transformed_meshes
+
 
 class Renderer:
     """Handles mesh rendering and visualization."""
@@ -306,11 +303,10 @@ class Renderer:
             return vertices_2d
 
     def render_mesh(self, img: Image.Image, mesh: trimesh.Trimesh, vertices_2d: np.ndarray) -> Image.Image:
-        """Render mesh on image."""
+        """Render mesh on image consistently."""
+        # Remove the per-frame flipping
+        draw = ImageDraw.Draw(img)
         try:
-            img = ImageOps.mirror(img)
-            draw = ImageDraw.Draw(img)
-            
             for face in mesh.faces:
                 face_vertices = vertices_2d[face]
                 draw.polygon(
@@ -319,23 +315,20 @@ class Renderer:
                     outline="gray",
                     width=1,
                 )
-            
-            return img
         except Exception as e:
             logger.error(f"Error rendering mesh: {str(e)}")
             raise e
-            
+        return img
+
 
 def main(args):
     # Initialize processors
-
     omni_calib_path = args.omni_intrinsics
     cam0_images_path, cam1_images_path, sync_file, output_path, results_folder = get_filepaths(args.root, args.n, args)
     kinect_matlab_jsonpath, omni_matlab_jsonpath, cam0_to_world_pth, world_to_cam1_pth = get_calib_paths(args.root, args.use_matlab, args.n)
 
     mesh_sync = MeshSynchronizer(sync_file, cam0_images_path)
     mesh_processor = MeshProcessor()
-
     renderer = Renderer(pickle.load(open(args.omni_intrinsics, "rb")))
     
     # Load and process meshes
@@ -352,41 +345,40 @@ def main(args):
     
     # Synchronize meshes
     synced_files, synced_meshes = mesh_sync.get_synced_meshes(transformed_meshes, args.n)
-    
+
     # Render if requested
     if args.render:
-        logger.info(f"Rendering {len(synced_files)} images to video")
-        logger.info(f"Saving to {args.output_dir}")
-        # Make sure the output directory exists
+        logger.info(f"Rendering {len(synced_files)} meshes to video")
         os.makedirs(args.output_dir, exist_ok=True)
-        total = len(synced_files)
         
-        # OpenCV VideoWriter setup
+        # Apply consistent orientation to all frames
         first_img_path = os.path.join(cam1_images_path, synced_files[0])
         img = Image.open(first_img_path)
+
+        # Apply single flip here if needed
+        # img = ImageOps.mirror(img)  # Remove if not needed
         frame = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
         height, width, layers = frame.shape
-        video_path = Path(args.output_dir) / "output.mp4"
         
+        video_path = Path(args.output_dir) / "output.mp4"
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         video = cv2.VideoWriter(str(video_path), fourcc, 30, (width, height))
-        print(len(synced_files), len(synced_meshes))
-
-        asdf
-        for frame_id in tqdm(sorted(synced_meshes.keys()), total=total):
-            if frame_id < len(synced_files):
-                img_path = synced_files[frame_id]
-            else:
-                logger.error(f"Frame ID {frame_id} is out of range.")
-                raise ValueError("Frame ID out of range")
-            meshes = synced_meshes[frame_id]
+        
+        # Process frames in strict sequential order
+        for frame_idx in tqdm(range(len(synced_files))):
+            img_path = synced_files[frame_idx]
+            meshes = synced_meshes[frame_idx]  # Now properly indexed
+            
             img = Image.open(os.path.join(cam1_images_path, img_path))
+            img = ImageOps.mirror(img)  # Consistent flipping for all frames
+            
             for mesh in meshes:
                 vertices_2d = renderer.project_vertices(mesh)
                 img = renderer.render_mesh(img, mesh, vertices_2d)
+                
             frame = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
             video.write(frame)
-        
+
         video.release()
         logger.info(f"Video saved to {video_path}")
 
