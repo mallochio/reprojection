@@ -68,12 +68,21 @@ def get_cam_pose(
     # Find the chess board corners
     ret, corners = cv.findChessboardCorners(img, grid_size)
     if not ret:
-        print(f"-> [{img_path}]: Could not find the chessboard!")
-        # raise Exception("Could not find the chessboard!")
-    
-    print(f"-> [{img_path}]: Found the chessboard!")
-    # Refine them
-    criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 100, 1e-6)
+        print(f"-> [{img_path}]: Could not find the chessboard! Trying blurring and stuff")
+        img = cv.convertScaleAbs(img, alpha=1.5, beta=50)
+        img = cv.equalizeHist(img)
+        img = cv.GaussianBlur(img, (5, 5), 0)
+        img = cv.adaptiveThreshold(img, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 11, 2)
+        ret, corners = cv.findChessboardCorners(img, grid_size)
+        criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 200, 1e-6)
+        if not ret:
+            raise Exception("Could not find the chessboard!")
+        else:
+            print(f"-> [{img_path}]: Found the chessboard this time!")
+    else:
+        print(f"-> [{img_path}]: Found the chessboard!")
+        # Refine them
+        criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 100, 1e-6)
     corners = cv.cornerSubPix(img, corners, (11, 11), (-1, -1), criteria)
     # Find the rotation and translation vectors.
     # cv.SOLVEPNP_SQPNP, cv.SOLVEPNP_ITERATIVE, cv.SOLVEPNP_IPPE? iterative seems best
