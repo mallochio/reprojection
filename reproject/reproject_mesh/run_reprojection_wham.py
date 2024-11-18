@@ -256,7 +256,7 @@ class MeshProcessor:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         return verts, betas, device
 
-    def transform_meshes(self, pred_bodies: Dict[int, List[trimesh.Trimesh]], transform_matrix: np.ndarray) -> Dict[int, List[trimesh.Trimesh]]:
+    def transform_meshes_old(self, pred_bodies: Dict[int, List[trimesh.Trimesh]], transform_matrix: np.ndarray) -> Dict[int, List[trimesh.Trimesh]]:
         """Transform meshes from Kinect to Omni camera frame."""
         transformed_meshes = {}
         logger.info(f"Transforming {len(pred_bodies)} meshes")
@@ -271,6 +271,130 @@ class MeshProcessor:
                     logger.error(f"Error transforming mesh: {str(e)}")
                     continue
         return transformed_meshes
+    
+    def transform_wham_to_humor(self, mesh, option='invert_yz'):
+        """
+        Transform the mesh from WHAM's coordinate system to HuMoR's coordinate system.
+    
+        Parameters:
+        - mesh: trimesh.Trimesh instance of the mesh to transform.
+        - option: str, specifies which transformation to apply. Possible values are:
+            - 'invert_yz': Invert Y and Z axes.
+            - 'invert_xz': Invert X and Z axes.
+            - 'rotate_y_180': Rotate 180 degrees around Y-axis.
+            - 'swap_yz': Swap Y and Z axes.
+            - 'invert_z': Invert Z-axis.
+    
+        Returns:
+        - mesh: transformed mesh.
+        """
+        import numpy as np
+        import trimesh
+    
+        if option == 'invert_yz':
+            # Invert Y and Z axes
+            alignment_matrix = np.eye(4)
+            alignment_matrix[1, 1] = -1  # Invert Y-axis
+            alignment_matrix[2, 2] = -1  # Invert Z-axis
+        elif option == 'invert_xz':
+            # Invert X and Z axes
+            alignment_matrix = np.eye(4)
+            alignment_matrix[0, 0] = -1  # Invert X-axis
+            alignment_matrix[2, 2] = -1  # Invert Z-axis
+        elif option == 'rotate_y_180':
+            # Rotate 180 degrees around the Y-axis
+            alignment_matrix = trimesh.transformations.rotation_matrix(np.pi, [0, 1, 0])
+        elif option == 'swap_yz':
+            # Swap Y and Z axes
+            alignment_matrix = np.array([
+                [1, 0, 0, 0],
+                [0, 0, 1, 0],
+                [0, 1, 0, 0],
+                [0, 0, 0, 1],
+            ])
+        elif option == 'invert_z':
+            # Invert Z-axis
+            alignment_matrix = np.eye(4)
+            alignment_matrix[2, 2] = -1  # Invert Z-axis
+        else:
+            raise ValueError(f"Unknown option '{option}'")
+    
+        # Apply the transformation to the mesh
+        mesh.apply_transform(alignment_matrix)
+    
+        return mesh
+    def transform_meshes(self, pred_bodies, transform_matrix):
+        transformed_meshes = {}
+        logger.info(f"Transforming {len(pred_bodies)} meshes")
+        for frame_id, meshes in tqdm(pred_bodies.items()):
+            transformed_meshes[frame_id] = []
+            for mesh in meshes:
+                try:
+                    transformed_mesh = mesh.copy()
+                    # First align coordinate systems
+                    # Options: 'invert_yz', 'invert_xz', 'rotate_y_180', 'swap_yz', 'invert_z'
+                    transformed_mesh = self.transform_wham_to_humor(transformed_mesh, option='invert_z')
+                    # Then apply the extrinsic transformation
+                    transformed_mesh.apply_transform(transform_matrix)
+                    transformed_meshes[frame_id].append(transformed_mesh)
+                except Exception as e:
+                    logger.error(f"Error transforming mesh: {str(e)}")
+                    continue
+        return transformed_meshes
+    
+    def analyze_transform(self, transform_matrix: np.ndarray):
+        """Analyze transformation matrix properties"""
+        print("Transform Matrix:")
+        print(transform_matrix)
+        print(f"Rotation matrix determinant: {np.linalg.det(transform_matrix[:3,:3])}")
+        print(f"Translation magnitude: {np.linalg.norm(transform_matrix[:3,3])}")
+
+    def debug_wham_structure(self, wham_output: Dict, seq_idx: int):
+        """Debug WHAM output structure"""
+        print(f"Sequence {seq_idx} stats:")
+        print(f"Verts shape: {wham_output[seq_idx]['verts'].shape}")
+        print(f"Trans_world shape: {wham_output[seq_idx]['trans_world'].shape}")
+        print(f"Frame IDs: {wham_output[seq_idx]['frame_id'][:5]}...")
+        print(f"Vertex range: {wham_output[seq_idx]['verts'].min():.3f} to {wham_output[seq_idx]['verts'].max():.3f}")
+
+    def visualize_raw_mesh(self, mesh: trimesh.Trimesh, output_path: str):
+        """Visualize raw mesh using matplotlib"""
+        import matplotlib.pyplot as plt
+        from mpl_toolkits.mplot3d import Axes3D
+        
+        fig = plt.figure(figsize=(10, 10))
+        ax = fig.add_subplot(111, projection='3d')
+        
+        vertices = mesh.vertices
+        ax.scatter(vertices[:, 0], vertices[:, 1], vertices[:, 2], 
+                  c='b', marker='.', s=1, alpha=0.5)
+        
+        for edge in mesh.edges:
+            v1 = vertices[edge[0]]
+            v2 = vertices[edge[1]]
+            ax.plot([v1[0], v2[0]], [v1[1], v2[1]], [v1[2], v2[2]], 
+                    'k-', linewidth=0.1, alpha=0.3)
+        
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_zlabel('Z')
+        ax.set_title('Mesh Visualization')
+        
+        center = mesh.centroid
+        radius = np.linalg.norm(vertices - center, axis=1).max()
+        ax.set_xlim(center[0] - radius, center[0] + radius)
+        ax.set_ylim(center[1] - radius, center[1] + radius)
+        ax.set_zlim(center[2] - radius, center[2] + radius)
+        
+        plot_path = os.path.join(output_path, 'mesh_visualization.png')
+        plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        obj_path = os.path.join(output_path, 'mesh.obj')
+        mesh.export(obj_path)
+        
+        logger.info(f"Saved mesh visualization to {plot_path}")
+        logger.info(f"Saved mesh OBJ to {obj_path}")
 
 
 class Renderer:
@@ -319,44 +443,99 @@ class Renderer:
             logger.error(f"Error rendering mesh: {str(e)}")
             raise e
         return img
+    
+    def add_debug_markers(self, img: Image.Image, mesh: trimesh.Trimesh, color=(255,0,0)) -> Image.Image:
+        """Add visual markers for key points using existing projection"""
+        # Convert PIL Image to numpy array
+        img_array = np.array(img)
+        
+        # For centroid
+        centroid = mesh.centroid.reshape(1,3)
+        centroid_2d = self.project_vertices(trimesh.Trimesh(vertices=centroid, faces=[]))
+        # Fix: Extract x,y coordinates properly
+        point = tuple(map(int, centroid_2d[0,0]))  # Get (x,y) from [[x,y]]
+        cv2.circle(img_array, point, 5, color, -1)
+        
+        # For bounding box corners
+        bbox_points = mesh.bounds.reshape(-1,3)
+        bbox_2d = self.project_vertices(trimesh.Trimesh(vertices=bbox_points, faces=[]))
+        for point_2d in bbox_2d:
+            # Fix: Extract x,y coordinates properly
+            point = tuple(map(int, point_2d[0]))  # Get (x,y) from [x,y]
+            cv2.circle(img_array, point, 3, color, -1)
+            
+        return Image.fromarray(img_array)
+
+
+    def debug_projection(self, mesh: trimesh.Trimesh, transform_matrix: np.ndarray):
+        """Debug projection pipeline"""
+        print(f"Original mesh centroid: {mesh.centroid}")
+        
+        transformed = mesh.copy()
+        transformed.apply_transform(transform_matrix)
+        print(f"Transformed centroid: {transformed.centroid}")
+        
+        test_points = transformed.vertices[[0, 100, 1000, -1]]
+        print("Projected test points:")
+        vertices_2d = self.project_vertices(
+            trimesh.Trimesh(vertices=test_points, faces=[])
+        )
+        print(vertices_2d)
 
 
 def main(args):
     # Initialize processors
     omni_calib_path = args.omni_intrinsics
     cam0_images_path, cam1_images_path, sync_file, output_path, results_folder = get_filepaths(args.root, args.n, args)
-    kinect_matlab_jsonpath, omni_matlab_jsonpath, cam0_to_world_pth, world_to_cam1_pth = get_calib_paths(args.root, args.use_matlab, args.n)
+    kinect_matlab_jsonpath, omni_matlab_jsonpath, cam0_to_world_pth, world_to_cam1_pth = get_calib_paths(
+        args.root, args.use_matlab, args.n)
+
+    # cam0_to_world_pth = "/home/sid/Projects/reprojection/calibration/opencv_calibration/k0_rgb_cam_to_world.pkl"
+    # world_to_cam1_pth = "/home/sid/Projects/reprojection/calibration/opencv_calibration/k0_omni_world_to_cam.pkl"
 
     mesh_sync = MeshSynchronizer(sync_file, cam0_images_path)
     mesh_processor = MeshProcessor()
     renderer = Renderer(pickle.load(open(args.omni_intrinsics, "rb")))
     
     # Load and process meshes
-    # TODO - Overloading results folder for now, the results are not in the proper folder structure yet
+    logger.info("Loading WHAM meshes...")
     results_folder = args.results_folder
     pred_bodies = mesh_processor.load_meshes(results_folder)
     
-    # Get transformation matrix
+    if not pred_bodies:
+        raise ValueError("No valid meshes found in results folder")
+        
+    # Debug first mesh if requested
+    if args.debug:
+        first_frame = list(pred_bodies.keys())[0]
+        first_mesh = pred_bodies[first_frame][0]
+        mesh_processor.visualize_raw_mesh(first_mesh, args.output_dir)
+    
+    # Get and verify transformation matrix
     transform_matrix = (get_transformation_matrix_matlab if args.use_matlab 
                        else get_transformation_matrix_opencv)(cam0_to_world_pth, world_to_cam1_pth)
+    
+    if args.debug:
+        mesh_processor.analyze_transform(transform_matrix)
     
     # Transform meshes
     transformed_meshes = mesh_processor.transform_meshes(pred_bodies, transform_matrix)
     
     # Synchronize meshes
     synced_files, synced_meshes = mesh_sync.get_synced_meshes(transformed_meshes, args.n)
+    
+    if not synced_files:
+        raise ValueError("No synchronized frames found")
 
     # Render if requested
     if args.render:
         logger.info(f"Rendering {len(synced_files)} meshes to video")
         os.makedirs(args.output_dir, exist_ok=True)
         
-        # Apply consistent orientation to all frames
+        # Setup video writer
         first_img_path = os.path.join(cam1_images_path, synced_files[0])
         img = Image.open(first_img_path)
-
-        # Apply single flip here if needed
-        # img = ImageOps.mirror(img)  # Remove if not needed
+        img = ImageOps.mirror(img)
         frame = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
         height, width, layers = frame.shape
         
@@ -364,21 +543,47 @@ def main(args):
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         video = cv2.VideoWriter(str(video_path), fourcc, 30, (width, height))
         
-        # Process frames in strict sequential order
-        for frame_idx in tqdm(range(len(synced_files))):
+        # Process frames
+        for frame_idx in tqdm(range(len(synced_files)), desc="Rendering frames"):
             img_path = synced_files[frame_idx]
-            meshes = synced_meshes[frame_idx]  # Now properly indexed
+            meshes = synced_meshes[frame_idx]
             
+            # Load and process image
             img = Image.open(os.path.join(cam1_images_path, img_path))
-            img = ImageOps.mirror(img)  # Consistent flipping for all frames
+            # Mirror image horizontally since extrinsics were built for mirrored images
+            img = ImageOps.mirror(img)
+
             
+            # Render each mesh in the frame
             for mesh in meshes:
-                vertices_2d = renderer.project_vertices(mesh)
-                img = renderer.render_mesh(img, mesh, vertices_2d)
-                
+                try:
+                    # Project vertices
+                    vertices_2d = renderer.project_vertices(mesh)
+                    
+                    # Debug projection if requested
+                    if args.debug and frame_idx == 0:
+                        renderer.debug_projection(mesh, transform_matrix)
+                    
+                    # Render mesh
+                    img = renderer.render_mesh(img, mesh, vertices_2d)
+                    
+                    # Add debug markers if requested
+                    if args.debug:
+                        img = renderer.add_debug_markers(img, mesh)
+                        
+                except Exception as e:
+                    logger.error(f"Error rendering mesh in frame {frame_idx}: {str(e)}")
+                    continue
+            
+            # Convert to BGR for video writing
             frame = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
             video.write(frame)
-
+            
+            # Save debug frame if requested
+            if args.debug and frame_idx == 0:
+                debug_path = Path(args.output_dir) / "debug_frame.png"
+                cv2.imwrite(str(debug_path), frame)
+        
         video.release()
         logger.info(f"Video saved to {video_path}")
 
@@ -400,29 +605,21 @@ if __name__ == "__main__":
     parser.add_argument(
         "--use-matlab",
         action="store_true",
-        default=False,
         help="Use matrices from MATLAB instead of OpenCV",
     )
     parser.add_argument(
         "--partial-meshes",
-        action="store_true",
-        default=False,
+        action="store_true"
     )   
     parser.add_argument(
         "--render",
         action="store_true",
-        default=True,
     )
     parser.add_argument(
         "--n",
         type=int,
         help="Capture number, if only one is to be reprojected",
         default=0,
-    )
-    parser.add_argument(
-        "--save-reprojections",
-        action="store_true",
-        default=False,
     )
     parser.add_argument(
         "--results-folder",
@@ -435,6 +632,11 @@ if __name__ == "__main__":
         type=str,
         help="Directory to save rendered images and projections",
         default="/home/sid/Projects/WHAM/output/demo/dump",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debugging mode",
     )
     args = parser.parse_args()
     main(args)
