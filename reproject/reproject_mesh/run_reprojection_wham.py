@@ -272,13 +272,14 @@ class MeshProcessor:
                     continue
         return transformed_meshes
     
-    def transform_wham_to_humor(self, mesh, option='invert_yz'):
+    def transform_wham_to_humor(self, mesh, option='identity'):
         """
         Transform the mesh from WHAM's coordinate system to HuMoR's coordinate system.
     
         Parameters:
         - mesh: trimesh.Trimesh instance of the mesh to transform.
         - option: str, specifies which transformation to apply. Possible values are:
+            - 'identity': No transformation.
             - 'invert_yz': Invert Y and Z axes.
             - 'invert_xz': Invert X and Z axes.
             - 'rotate_y_180': Rotate 180 degrees around Y-axis.
@@ -290,7 +291,10 @@ class MeshProcessor:
         """
         import numpy as np
         import trimesh
-    
+
+        if option == 'identity':
+            # No transformation
+            alignment_matrix = np.eye(4)
         if option == 'invert_yz':
             # Invert Y and Z axes
             alignment_matrix = np.eye(4)
@@ -321,8 +325,8 @@ class MeshProcessor:
     
         # Apply the transformation to the mesh
         mesh.apply_transform(alignment_matrix)
-    
         return mesh
+    
     def transform_meshes(self, pred_bodies, transform_matrix):
         transformed_meshes = {}
         logger.info(f"Transforming {len(pred_bodies)} meshes")
@@ -333,7 +337,7 @@ class MeshProcessor:
                     transformed_mesh = mesh.copy()
                     # First align coordinate systems
                     # Options: 'invert_yz', 'invert_xz', 'rotate_y_180', 'swap_yz', 'invert_z'
-                    transformed_mesh = self.transform_wham_to_humor(transformed_mesh, option='invert_z')
+                    # transformed_mesh = self.transform_wham_to_humor(transformed_mesh, option='identity')
                     # Then apply the extrinsic transformation
                     transformed_mesh.apply_transform(transform_matrix)
                     transformed_meshes[frame_id].append(transformed_mesh)
@@ -540,7 +544,7 @@ def main(args):
         height, width, layers = frame.shape
         
         video_path = Path(args.output_dir) / "output.mp4"
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v') 
         video = cv2.VideoWriter(str(video_path), fourcc, 30, (width, height))
         
         # Process frames
@@ -594,7 +598,7 @@ if __name__ == "__main__":
         "--root",
         type=str, 
         help="Root directory of the dataset", 
-        default="/home/NAS-mountpoint/kinect-omni-ego/2023-02-09/at-unis/lab/a01"
+        default="/home/NAS-mountpoint/kinect-omni-ego/2023-02-09/at-unis/lab/a04-2"
     )
     parser.add_argument(
         "--omni_intrinsics", 
@@ -625,13 +629,13 @@ if __name__ == "__main__":
         "--results-folder",
         type=str,
         help="Path to the WHAM results folder",
-        default="/home/sid/Projects/WHAM/output/demo/2023-02-09_at-unis_lab_a01_capture0"
+        default="/home/sid/Projects/WHAM/output/demo/2023-02-09_at-unis_lab_a04-2_capture0/rgb"
     )
     parser.add_argument(
         "--output-dir",
         type=str,
         help="Directory to save rendered images and projections",
-        default="/home/sid/Projects/WHAM/output/demo/dump",
+        default="/home/sid/Projects/WHAM/output/demo/2023-02-09_at-unis_lab_a04-2_capture0/reprojections",
     )
     parser.add_argument(
         "--debug",
