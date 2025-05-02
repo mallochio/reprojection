@@ -15,7 +15,7 @@ import os
 # Walk through the directory until you hit a folder named "reprojected"
 # For each folder named "reprojected", run the pose_to_mask.py script
 
-ROOT_DIR = "/home/sid/Projects/NAS-mountpoint/kinect-omni-ego/2023-02-09"
+ROOT_DIR = "/home/sid/Projects/NAS-mountpoint/kinect-omni-ego/2024-01-12"
 
 for root, dirs, files in os.walk(ROOT_DIR):
     if "reprojected" in dirs:

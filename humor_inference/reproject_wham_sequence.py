@@ -11,7 +11,11 @@
 '''
 
 import argparse
-import os
+import os, sys
+
+sys.path.append('/home/sid/Projects/reprojection')
+sys.path.append('/home/sid/Projects/humor/humor')
+
 import pickle
 from typing import Optional, Dict, List
 
@@ -21,8 +25,9 @@ import numpy as np
 import joblib
 from tqdm import tqdm
 
+
 # Import functions and classes from the HUMOR script
-from reproject_humor_sequence import (
+from humor_inference.reproject_humor_sequence import (
     BodyModel,
     c2c,
     render_on_images,
@@ -180,7 +185,6 @@ def main(
 
     # Sanitize predictions for world coordinates
     wham_output = sanitize_wham_preds(wham_output, T=wham_output["verts"].shape[0])
-
     verts, betas, device = get_wham_parameters(wham_output)
     wham_meshes = get_wham_mesh_sequence(wham_output, betas, device)
 

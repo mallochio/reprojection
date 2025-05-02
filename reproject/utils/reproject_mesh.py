@@ -84,7 +84,6 @@ def transform_RGBimgcoords_to_depthcoords(
     ### Step 3 - Transform the depth camera coordinates to the depth image coordinates
     # distortion = get_distortion_matrix(depth_params)
     # depth_intrinsics = np.array(depth_params["IntrinsicMatrix"]).T
-    ic(depth_camera_coordinates.shape)
     depthX, depthY, depthZ = depth_camera_coordinates
     plot_mesh_3D(depthX, depthY, depthZ, dst_filepath="/home/sid/mesh-depth-cam1.html")
     

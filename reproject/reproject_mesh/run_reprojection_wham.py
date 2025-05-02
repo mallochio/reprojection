@@ -81,8 +81,7 @@ class MeshSynchronizer:
         # Create mapping of omni filenames to mesh indices
         synced_pairs = []
         transformed_meshes_dict = {}
-        
-        for _, row in self.sync_data.iterrows():
+        for ix, row in self.sync_data.iterrows():
             capture_file = row[f"capture{n}"]
             omni_file = row["omni"]
             
@@ -91,13 +90,16 @@ class MeshSynchronizer:
                 if mesh_idx in transformed_meshes:
                     transformed_meshes_dict[mesh_idx] = transformed_meshes[mesh_idx]
                     synced_pairs.append((omni_file, mesh_idx))
+            else:
+                raise ValueError(f"Image file {capture_file} not found in capture{n} directory")
         
         # Sort by omni filename to maintain temporal order
         synced_pairs.sort(key=lambda x: x[0])
         synced_omni_files = [pair[0] for pair in synced_pairs]
-        ordered_mesh_dict = {idx: transformed_meshes_dict[pair[1]] 
-                           for idx, pair in enumerate(synced_pairs)}
-        
+        ordered_mesh_dict = {
+            idx: transformed_meshes_dict[pair[1]] 
+            for idx, pair in enumerate(synced_pairs)
+        }
         logger.info(f"Synchronized {len(synced_omni_files)} meshes with camera files")
         return synced_omni_files, ordered_mesh_dict
 
@@ -151,7 +153,7 @@ class MeshProcessor:
             # Construct the meshes directly from WHAM vertices
             faces = pred_bm.bm.faces_tensor 
             faces = c2c(faces)  # Converts to NumPy
-
+        
             try:
                 wham_meshes = [
                     trimesh.Trimesh(
@@ -256,22 +258,7 @@ class MeshProcessor:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         return verts, betas, device
 
-    def transform_meshes_old(self, pred_bodies: Dict[int, List[trimesh.Trimesh]], transform_matrix: np.ndarray) -> Dict[int, List[trimesh.Trimesh]]:
-        """Transform meshes from Kinect to Omni camera frame."""
-        transformed_meshes = {}
-        logger.info(f"Transforming {len(pred_bodies)} meshes")
-        for frame_id, meshes in tqdm(pred_bodies.items()):
-            transformed_meshes[frame_id] = []
-            for mesh in meshes:
-                try:
-                    transformed_mesh = mesh.copy()
-                    transformed_mesh.apply_transform(transform_matrix)
-                    transformed_meshes[frame_id].append(transformed_mesh)
-                except Exception as e:
-                    logger.error(f"Error transforming mesh: {str(e)}")
-                    continue
-        return transformed_meshes
-    
+
     def transform_wham_to_humor(self, mesh, option='identity'):
         """
         Transform the mesh from WHAM's coordinate system to HuMoR's coordinate system.
@@ -327,7 +314,7 @@ class MeshProcessor:
         mesh.apply_transform(alignment_matrix)
         return mesh
     
-    def transform_meshes(self, pred_bodies, transform_matrix):
+    def transform_meshes(self, pred_bodies, transform_matrix, humor_transform='identity'):
         transformed_meshes = {}
         logger.info(f"Transforming {len(pred_bodies)} meshes")
         for frame_id, meshes in tqdm(pred_bodies.items()):
@@ -337,7 +324,7 @@ class MeshProcessor:
                     transformed_mesh = mesh.copy()
                     # First align coordinate systems
                     # Options: 'invert_yz', 'invert_xz', 'rotate_y_180', 'swap_yz', 'invert_z'
-                    # transformed_mesh = self.transform_wham_to_humor(transformed_mesh, option='identity')
+                    # transformed_mesh = self.transform_wham_to_humor(transformed_mesh, option=humor_transform)
                     # Then apply the extrinsic transformation
                     transformed_mesh.apply_transform(transform_matrix)
                     transformed_meshes[frame_id].append(transformed_mesh)
@@ -544,7 +531,7 @@ def main(args):
         height, width, layers = frame.shape
         
         video_path = Path(args.output_dir) / "output.mp4"
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v') 
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # type: ignore
         video = cv2.VideoWriter(str(video_path), fourcc, 30, (width, height))
         
         # Process frames

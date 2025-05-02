@@ -27,7 +27,7 @@ from humor_inference.reproject_humor_sequence import make_44
 def save_dataset_files(poses, meshes, dataset_dir, cam1_images_path):
     """
     Save the reprojected files to the dataset directory
-    Poses: List of reprojected vertices in the frame of the omni camera
+    Poses: List of reprojected vertices in the frame of the omni image
     Meshes: List of reprojected (tri)meshes in the frame of the omni camera
     Returns: None
     """
@@ -94,10 +94,13 @@ def get_filepaths(root, n, args):
     cam1_images_path = f"{root}/omni"
     capture_dir = f"{root}/capture{n}/rgb"
     sync_file = f"{root}/synced_filenames_full.txt"
-    output_path = f"{root}/capture{n}/out_capture{n}/reprojected"
     results_folder = f"{root}/capture{n}/out_capture{n}/results_out/final_results"
     if args.partial_meshes:
         results_folder = f"{root}/out_capture{n}/results_out"
+    if args.output_dir:
+        output_path = args.output_dir
+    else:
+        output_path = f"{root}/capture{n}/out_capture{n}/reprojected"
     
     for path in [cam1_images_path, capture_dir, sync_file, results_folder]:
         if not os.path.exists(path):
@@ -142,7 +145,7 @@ def get_camera_parameters(params, camera_type):
     camera_params["tt"] = [tt[i] for i in range(tt.shape[0])]
     return camera_params
 
-def get_transformation_matrix_opencv(cam0_to_world_pth, world_to_cam1_pth):
+def get_transformation_matrix_opencv(cam0_to_world_pth, world_to_cam1_pth, divider=1000.0):
     with open(cam0_to_world_pth, "rb") as f:
         cam0_to_world = make_44(pickle.load(f))
 
@@ -150,7 +153,7 @@ def get_transformation_matrix_opencv(cam0_to_world_pth, world_to_cam1_pth):
         world_to_cam1 = make_44(pickle.load(f))
 
     transform = world_to_cam1 @ cam0_to_world
-    transform[:3, 3] = transform[:3, 3] / 1000.0
+    transform[:3, 3] = transform[:3, 3] / divider
     return transform
 
 

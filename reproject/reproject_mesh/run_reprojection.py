@@ -12,23 +12,19 @@
 
 import os
 import sys
-import json
 import torch
 
-sys.path.append('/home/sid/Projects/OmniScience/code/reprojection')
-sys.path.append('/home/sid/Projects/OmniScience/other/humor/humor')
+sys.path.append('/home/sid/Projects/reprojection')
+sys.path.append('/home/sid/Projects/humor/humor')
 
-from fitting.fitting_utils import load_res, prep_res, run_smpl
+from fitting.fitting_utils import prep_res, run_smpl
 from body_model.body_model import BodyModel
-from body_model.utils import SMPL_JOINTS
-from fitting.eval_utils import SMPL_SIZES
-from utils.torch import copy2cpu as c2c
 
 # from reprojection
 
 import cv2
 import pickle
-import trimesh
+import trimesh  
 import argparse
 import numpy as np
 from typing import List
@@ -36,13 +32,11 @@ from PIL import Image, ImageDraw, ImageOps
 from tqdm import tqdm
 import pandas as pd
 from pathlib import Path
-from scipy.optimize import least_squares
-from humor_inference.reproject_humor_sequence import make_44, transform_SMPL_sequence, get_camera_params, sanitize_preds
+from humor_inference.reproject_humor_sequence import transform_SMPL_sequence, get_camera_params, sanitize_preds
 from reproject.reproject_mesh.reprojection_utils import save_dataset_files, get_filepaths, get_transformation_matrix_matlab, get_transformation_matrix_opencv, get_kinect_list, get_calib_paths
-from bundle_adjustment import perform_bundle_adjustment
 
 
-def get_synced_meshes(sync_file, capture_dir, transformed_meshes: List[trimesh.Trimesh]):
+def get_synced_meshes(sync_file, capture_dir, transformed_meshes: List[trimesh.Trimesh], n: int = 0):
     df = pd.read_csv(sync_file, sep=";", header=0)
     capture_files = sorted(os.listdir(capture_dir))
 
@@ -58,7 +52,7 @@ def get_synced_meshes(sync_file, capture_dir, transformed_meshes: List[trimesh.T
     return synced_cam1_files, transformed_meshes_new
 
 
-def render_mesh(img, img_path, mesh, vertices_2d, output_dir=None):
+def render_mesh(img, img_path, mesh, vertices_2d, output_dir=None, show_on_screen=True):
     try:
         img = ImageOps.mirror(img)
     except Exception as e:
@@ -76,15 +70,18 @@ def render_mesh(img, img_path, mesh, vertices_2d, output_dir=None):
             # outline="black",
             width=1,
         )
+    img = img.resize((int(img.size[0] / 2.), int(img.size[1] / 2.)))
     # Save the image
     if output_dir is not None:
-        img.save(os.path.join(output_dir, f"{i:08d}.png"))
+        os.makedirs(output_dir, exist_ok=True)
+        i = os.path.basename(img_path).split(".")[0]
+        img.save(os.path.join(output_dir, f"{i}.png"))
         
-    img = img.resize((int(img.size[0] / 2.), int(img.size[1] / 2.)))
-    # Display image in original RGB format
-    cv2.imshow("Image", cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR))
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        sys.exit()
+    if show_on_screen:
+        # Display image in original RGB format
+        cv2.imshow("Image", cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR))
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            sys.exit()
     return img
 
 
@@ -95,6 +92,8 @@ def project_meshes(
     sync_file: str,
     camera_calib: dict,
     render: bool = True,
+    output_dir: str = None,
+    n: int = 0,
 ):
     """
     Project the mesh sequence on the (omni) images.
@@ -106,7 +105,7 @@ def project_meshes(
         for filename in sorted(os.listdir(cam1_images_dir))
         if filename.endswith(".png") or filename.endswith(".jpg")
     ]
-    synced_cam1_files, mesh_seq = get_synced_meshes(sync_file, cam0_images_dir, mesh_seq)
+    synced_cam1_files, mesh_seq = get_synced_meshes(sync_file, cam0_images_dir, mesh_seq, n)
     images = [i for i in images if i in synced_cam1_files]
     images = [os.path.join(cam1_images_dir, i) for i in images]
 
@@ -142,7 +141,7 @@ def project_meshes(
         else:
             vertices_2d, _ = cv2.projectPoints(mesh.vertices, np.zeros(3), np.zeros(3), camera_matrix, dist_coeffs)
         if render:
-            img = render_mesh(img, img_path, mesh, vertices_2d)
+            img = render_mesh(img, img_path, mesh, vertices_2d, output_dir)
 
         projected_vertices.append(vertices_2d)
 
@@ -191,7 +190,7 @@ def get_meshes(results_folder: str):
         optim_bm_path = optim_bm_str.split(" ")[1]
 
     if not os.path.exists(optim_bm_path):
-        optim_bm_path = "/home/sid/Projects/OmniScience/other/humor/body_models/smplh/male/model.npz"
+        optim_bm_path = "/home/sid/Projects/humor/body_models/smplh/male/model.npz"
 
     # humor model
     pred_bm = BodyModel(bm_path=optim_bm_path, num_betas=num_pred_betas, batch_size=T).to(device)
@@ -229,7 +228,7 @@ def project_single(n: int):
     with open(omni_intrinsics_file, "rb") as f:
         omni_params = pickle.load(f)
 
-    projected_vertices, transformed_meshes = project_meshes(cam0_images_path, cam1_images_path, transformed_meshes, sync_file, omni_params, render=render_meshes)
+    projected_vertices, transformed_meshes = project_meshes(cam0_images_path, cam1_images_path, transformed_meshes, sync_file, omni_params, render=render_meshes, output_dir=output_path, n=n)
     if save_reprojections:
         save_dataset_files(projected_vertices, transformed_meshes, output_path, cam1_images_path)
 
@@ -240,41 +239,43 @@ if __name__ == "__main__":
         "root",
         type=str, 
         help="Root directory of the dataset", 
-        default="/home/sid/Projects/OmniScience/mount-NAS/kinect-omni-ego/2024-01-12/at-unis/lab/sid"
+        default="/home/NAS-mountpoint/kinect-omni-ego/2023-02-09/at-unis/lab/a04-2/"
     )
 
     parser.add_argument(
         "--omni_intrinsics", 
         type=str, 
         help="Path to the omni intrinsics file", 
-        default="/home/sid/Projects/OmniScience/code/reprojection/calibration/intrinsics/omni_calib.pkl"
+        default="/home/sid/Projects/reprojection/calibration/intrinsics/omni_calib.pkl"
     )
     parser.add_argument(
         "--use-matlab",
         action="store_true",
-        default=False,
         help="Use matrices from MATLAB instead of OpenCV",
     )
     parser.add_argument(
         "--partial-meshes",
         action="store_true",
-        default=False,
     )   
     parser.add_argument(
         "--render",
         action="store_true",
-        default=False,
     )
     parser.add_argument(
         "--n",
         type=int,
         help="Capture number, if only one is to be reprojected",
-        default=None,
+        required=True,
     )
     parser.add_argument(
         "--save-reprojections",
         action="store_true",
-        default=False,
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        help="Directory to save reprojected outputs. If not defined, saves to a sub-folder derived from the root folder",
+        default=None,
     )
 
     args = parser.parse_args()
@@ -297,5 +298,5 @@ if __name__ == "__main__":
             n = kinect_list[0]
             print(f"Using capture{n} for reprojection")
             project_single(n)
-    else:
+    else:   
         project_single(n)

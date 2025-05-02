@@ -117,7 +117,7 @@ def process_image(image_path, output_folder):
 # Main function to process images
 def main(base_path):
     num_cores_to_use = (
-        64  # min(8, os.cpu_count())  # Use a reasonable number of CPU cores
+        16  # min(8, os.cpu_count())  # Use a reasonable number of CPU cores
     )
 
     with concurrent.futures.ProcessPoolExecutor(

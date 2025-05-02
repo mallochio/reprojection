@@ -20,9 +20,9 @@ from multiprocessing import Pool
 sys.path.append(abspath("../.."))
 sys.path.append(abspath(".."))
 
-script_path =  "/home/sid/Projects/OmniScience/code/reprojection/calibration/opencv_calibration/get_cam_pose.py"
-intrinsics_path = "/home/sid/Projects/OmniScience/code/reprojection/calibration/intrinsics"
-base_dir = Path("/home/sid/Projects/OmniScience/mount-NAS/kinect-omni-ego/2022-09-23")
+script_path =  "/home/sid/Projects/reprojection/calibration/opencv_calibration/get_cam_pose.py"
+intrinsics_path = "/home/sid/Projects/reprojection/calibration/intrinsics"
+base_dir = Path("/home/NAS-mountpoint/kinect-omni-ego/2022-09-23")
 
 def process_directory(path):
     prefixes = ["k0", "k1", "k2"]
